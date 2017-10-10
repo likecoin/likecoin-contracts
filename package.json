@@ -1,0 +1,12 @@
+{
+  "name": "like-contracts",
+  "version": "0.0.1",
+  "description": "Contracts for Like Coin",
+  "scripts": {
+    "test": "truffle test"
+  },
+  "author": "nnkken",
+  "dependencies": {
+    "bignumber.js": "^4.1.0"
+  }
+}
