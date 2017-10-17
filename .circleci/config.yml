@@ -1,0 +1,25 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/like-token-contracts
+    docker:
+      - image: node:8-alpine
+    steps:
+      - run: apk add --no-cache git gzip tar
+      - checkout
+      - restore_cache:
+          key: like-token-contracts-{{ checksum "package.json" }}
+      - run:
+          name: Dependencies
+          command: yarn
+      - run:
+          name: Start testrpc server
+          command: yarn run server
+          background: true
+      - run:
+          name: Start test
+          command: yarn run test
+      - save_cache:
+          key: like-token-contracts-{{ checksum "package.json" }}
+          paths:
+            - "~/.cache/yarn"
