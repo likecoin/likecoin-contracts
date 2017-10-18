@@ -1,46 +1,7 @@
 /* eslint-env mocha, node */
-/* global artifacts, contract, assert, Promise */
+/* global artifacts, contract, assert */
 
-async function assertSolidityThrow(f, message) {
-    try {
-        await f();
-    } catch (e) {
-        if (/invalid opcode/.test(e.message)) {
-            return;
-        }
-    }
-    throw new Error(message);
-}
-
-function solidityEventPromise(eventSource, timeout=1000) {
-    return new Promise((resolve, reject) => {
-        let stopped = false;
-        const filter = eventSource.watch((err, event) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(event);
-            }
-            if (!stopped) {
-                filter.stopWatching();
-                stopped = true;
-            }
-        });
-
-        // If no timeout is set and the event is missed, the test will run forever
-        if (timeout !== 0) {
-            setTimeout(() => {
-                if (!stopped) {
-                    filter.stopWatching();
-                    stopped = true;
-                    reject(new Error("event timeout"));
-                }
-            }, timeout);
-        }
-        return filter;
-    });
-}
-
+const utils = require("./utils.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 
 // The number `100000000000000` is set in the deploy script `migrations/2_deploy_likecoin.js`
@@ -51,6 +12,12 @@ contract("LikeCoin", (accounts) => {
         const like = await LikeCoin.deployed();
         const balance = await like.balanceOf(accounts[0]);
         assert.equal(balance.valueOf(), initialAmount, `${initialAmount} units of coins should be put in account[0]`);
+    });
+
+    it(`should set totalSupply to ${initialAmount} units of coins`, async () => {
+        const like = await LikeCoin.deployed();
+        const supply = await like.totalSupply();
+        assert.equal(supply.valueOf(), initialAmount, `total supply should be set to ${initialAmount} units of coins`);
     });
 
     const transferAmount = 314;
@@ -69,10 +36,10 @@ contract("LikeCoin", (accounts) => {
         const like = await LikeCoin.deployed();
         const balance0 = (await like.balanceOf(accounts[0])).toNumber();
         const balance2 = (await like.balanceOf(accounts[2])).toNumber();
-        await assertSolidityThrow(async () => {
+        await utils.assertSolidityThrow(async () => {
             await like.transfer(accounts[1], balance0 + 1, {from: accounts[0]});
         }, "Sending more than owned should be forbidden");
-        await assertSolidityThrow(async () => {
+        await utils.assertSolidityThrow(async () => {
             await like.transfer(accounts[1], balance2 + 1, {from: accounts[2]});
         }, "Sending more than owned should be forbidden");
     });
@@ -100,10 +67,10 @@ contract("LikeCoin", (accounts) => {
     it("should forbid unapproved transferFrom", async () => {
         const like = await LikeCoin.deployed();
         const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1])).toNumber();
-        await assertSolidityThrow(async () => {
+        await utils.assertSolidityThrow(async () => {
             await like.transferFrom(accounts[2], accounts[0], allowanceOf1On0, {from: accounts[1]});
         }, "transferFrom with invalid owner should be forbidden");
-        await assertSolidityThrow(async () => {
+        await utils.assertSolidityThrow(async () => {
             await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0, {from: accounts[2]});
         }, "transferFrom with invalid spender should be forbidden");
     });
@@ -111,7 +78,7 @@ contract("LikeCoin", (accounts) => {
     it("should forbid transferFrom more than allowance value", async () => {
         const like = await LikeCoin.deployed();
         const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1])).toNumber();
-        await assertSolidityThrow(async () => {
+        await utils.assertSolidityThrow(async () => {
             await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0 + 1, {from: accounts[1]});
         }, "transferFrom exceeding allowance should be forbidden");
     });
@@ -122,7 +89,7 @@ contract("LikeCoinEvents", (accounts) => {
     it("should emit Transfer event after transaction", async () => {
         const like = await LikeCoin.deployed();
         await like.transfer(accounts[1], transferAmount, {from: accounts[0]});
-        const event = await solidityEventPromise(like.Transfer());
+        const event = await utils.solidityEventPromise(like.Transfer());
         assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
         assert.equal(event.args._value, transferAmount, "Transfer event has wrong value on field '_value'");
@@ -132,7 +99,7 @@ contract("LikeCoinEvents", (accounts) => {
     it(`should emit Approval event after approve`, async () => {
         const like = await LikeCoin.deployed();
         await like.approve(accounts[1], allowance, {from: accounts[0]});
-        const approvalEvent = await solidityEventPromise(like.Approval());
+        const approvalEvent = await utils.solidityEventPromise(like.Approval());
         assert.equal(approvalEvent.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
         assert.equal(approvalEvent.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
         assert.equal(approvalEvent.args._value, allowance, "Approval event has wrong value on field '_value'");
