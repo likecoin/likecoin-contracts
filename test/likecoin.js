@@ -12,16 +12,31 @@ async function assertSolidityThrow(f, message) {
     throw new Error(message);
 }
 
-function eventPromise(eventSource) {
+function solidityEventPromise(eventSource, timeout=1000) {
     return new Promise((resolve, reject) => {
+        let stopped = false;
         const filter = eventSource.watch((err, event) => {
             if (err) {
                 reject(err);
             } else {
                 resolve(event);
             }
-            filter.stopWatching();
+            if (!stopped) {
+                filter.stopWatching();
+                stopped = true;
+            }
         });
+
+        // If no timeout is set and the event is missed, the test will run forever
+        if (timeout !== 0) {
+            setTimeout(() => {
+                if (!stopped) {
+                    filter.stopWatching();
+                    stopped = true;
+                    reject(new Error("event timeout"));
+                }
+            }, timeout);
+        }
         return filter;
     });
 }
@@ -104,10 +119,10 @@ contract("LikeCoin", (accounts) => {
 
 contract("LikeCoinEvents", (accounts) => {
     const transferAmount = 271;
-    it("should emit transfer event after transaction", async () => {
+    it("should emit Transfer event after transaction", async () => {
         const like = await LikeCoin.deployed();
         await like.transfer(accounts[1], transferAmount, {from: accounts[0]});
-        const event = await eventPromise(like.Transfer());
+        const event = await solidityEventPromise(like.Transfer());
         assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
         assert.equal(event.args._value, transferAmount, "Transfer event has wrong value on field '_value'");
@@ -117,7 +132,7 @@ contract("LikeCoinEvents", (accounts) => {
     it(`should emit Approval event after approve`, async () => {
         const like = await LikeCoin.deployed();
         await like.approve(accounts[1], allowance, {from: accounts[0]});
-        const approvalEvent = await eventPromise(like.Approval());
+        const approvalEvent = await solidityEventPromise(like.Approval());
         assert.equal(approvalEvent.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
         assert.equal(approvalEvent.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
         assert.equal(approvalEvent.args._value, allowance, "Approval event has wrong value on field '_value'");
