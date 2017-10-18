@@ -5,7 +5,9 @@ import "./ERC20.sol";
 contract LikeCoin is ERC20 {
     string constant public name = "Like Coin";
     string constant public symbol = "LIKE";
-    uint8 constant public decimals = 10;
+
+    // Synchronized to Ether -> Wei ratio, which is important
+    uint8 constant public decimals = 18;
 
     uint256 public supply;
     mapping(address => uint256) public balances;
@@ -54,6 +56,23 @@ contract LikeCoin is ERC20 {
         return allowed[_owner][_spender];
     }
 
-    // TODO: allow minting for multi-stage crowdsale
-    // TODO: allow burning unsold tokens
+    function burn(uint256 _value) {
+        // TODO
+    }
+
+    function registerCrowdsales(address[] _contractAddrs, uint256[] _values) {
+        // TODO
+    }
+
+    function registerContributorPool(address _contributorPoolAddr) {
+        // TODO
+    }
+
+    function registerUserGrowthPools(address[] _poolAddrs) {
+        // TODO
+    }
+
+    function mintForUserGrowthPool(uint256 _value) {
+        // TODO
+    }
 }
