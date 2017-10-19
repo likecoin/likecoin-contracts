@@ -1,5 +1,7 @@
 /* global Promise, web3 */
 
+const accounts = require("../accounts.json");
+
 async function assertSolidityThrow(f, message) {
     try {
         await f();
@@ -63,4 +65,30 @@ async function testrpcIncreaseTime(seconds) {
     return web3.eth.getBlock(web3.eth.blockNumber).timestamp;
 }
 
-module.exports = { assertSolidityThrow, solidityEventPromise, testrpcIncreaseTime };
+async function setBalance(addr, balance) {
+    const origBalance = web3.eth.getBalance(addr);
+    if (origBalance.gt(balance)) {
+        const toSend = origBalance.sub(balance);
+        await web3.eth.sendTransaction({
+            from: addr,
+            to: accounts[accounts.length - 1].address,
+            value: toSend,
+            gasPrice: 0
+        });
+    } else {
+        const toSend = balance.sub(origBalance);
+        await web3.eth.sendTransaction({
+            from: accounts[accounts.length - 1].address,
+            to: addr,
+            value: toSend,
+            gasPrice: 0
+        });
+    }
+}
+
+module.exports = {
+    assertSolidityThrow,
+    solidityEventPromise,
+    testrpcIncreaseTime,
+    setBalance
+};
