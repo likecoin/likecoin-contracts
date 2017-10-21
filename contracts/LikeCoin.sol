@@ -13,6 +13,12 @@ contract LikeCoin is ERC20 {
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
 
+    address public crowdsaleAddr;
+    address public contributorPoolAddr;
+    address[] public userGrowthPoolAddrs;
+    mapping (address => bool) isUserGrowthPool;
+    mapping (address => bool) userGrowthPoolMinted;
+
     function LikeCoin(uint256 _initialSupply) {
         supply = _initialSupply;
         balances[msg.sender] = _initialSupply;
@@ -57,22 +63,45 @@ contract LikeCoin is ERC20 {
     }
 
     function burn(uint256 _value) {
-        // TODO
+        require(balances[msg.sender] >= _value);
+        balances[msg.sender] -= _value;
+        supply -= _value;
+        Transfer(msg.sender, 0x0, _value);
     }
 
-    function registerCrowdsales(address[] _contractAddrs, uint256[] _values) {
-        // TODO
+    function registerCrowdsales(address _crowdsaleAddr, uint256 _value) {
+        require(crowdsaleAddr == 0x0);
+        require(_crowdsaleAddr != 0x0);
+        crowdsaleAddr = _crowdsaleAddr;
+        supply += _value;
+        balances[_crowdsaleAddr] += _value;
+        Transfer(0x0, crowdsaleAddr, _value);
     }
 
-    function registerContributorPool(address _contributorPoolAddr) {
-        // TODO
+    function registerContributorPool(address _contributorPoolAddr, uint256 _value) {
+        require(contributorPoolAddr == 0x0);
+        require(_contributorPoolAddr != 0x0);
+        contributorPoolAddr = _contributorPoolAddr;
+        supply += _value;
+        balances[contributorPoolAddr] += _value;
+        Transfer(0x0, contributorPoolAddr, _value);
     }
 
     function registerUserGrowthPools(address[] _poolAddrs) {
-        // TODO
+        require(userGrowthPoolAddrs.length == 0);
+        require(_poolAddrs.length > 0);
+        for (uint i = 0; i < _poolAddrs.length; i++) {
+            userGrowthPoolAddrs.push(_poolAddrs[i]);
+            isUserGrowthPool[_poolAddrs[i]] = true;
+        }
     }
 
     function mintForUserGrowthPool(uint256 _value) {
-        // TODO
+        require(isUserGrowthPool[msg.sender]);
+        require(!userGrowthPoolMinted[msg.sender]);
+        userGrowthPoolMinted[msg.sender] = true;
+        supply += _value;
+        balances[msg.sender] += _value;
+        Transfer(0x0, msg.sender, _value);
     }
 }
