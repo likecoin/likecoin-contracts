@@ -12,8 +12,9 @@ contract LikeCrowdsale {
     uint256 public hardCap;
     bool public success = false;
     bool public privateFundFinalized = false;
-    uint256 public remainingCoinUnits;
+    uint256 public remainingCoins;
     mapping (address => bool) public kycDone;
+    mapping (address => uint256) public etherSpent;
 
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _softCap, uint256 _hardCap) {
         owner = msg.sender;
@@ -23,7 +24,7 @@ contract LikeCrowdsale {
         coinsPerEth = _coinsPerEth;
         softCap = _softCap;
         hardCap = _hardCap;
-        remainingCoinUnits = hardCap;
+        remainingCoins = hardCap;
     }
 
     function addPrivateFund(address _addr, uint256 _value) {
