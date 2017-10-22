@@ -8,7 +8,8 @@
   },
   "author": "nnkken",
   "dependencies": {
-    "bignumber.js": "^4.1.0"
+    "bignumber.js": "^4.1.0",
+    "ethereumjs-util": "^5.1.2"
   },
   "devDependencies": {
     "ethereumjs-testrpc": "^4.1.3",
