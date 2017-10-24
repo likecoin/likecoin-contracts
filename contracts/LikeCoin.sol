@@ -13,6 +13,7 @@ contract LikeCoin is ERC20 {
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
 
+    address public owner;
     address public crowdsaleAddr;
     address public contributorPoolAddr;
     address[] public userGrowthPoolAddrs;
@@ -20,8 +21,9 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) userGrowthPoolMinted;
 
     function LikeCoin(uint256 _initialSupply) {
+        owner = msg.sender;
         supply = _initialSupply;
-        balances[msg.sender] = _initialSupply;
+        balances[owner] = _initialSupply;
     }
 
     function totalSupply() constant returns (uint256 totalSupply) {
@@ -70,6 +72,7 @@ contract LikeCoin is ERC20 {
     }
 
     function registerCrowdsales(address _crowdsaleAddr, uint256 _value) {
+        require(msg.sender == owner);
         require(crowdsaleAddr == 0x0);
         require(_crowdsaleAddr != 0x0);
         crowdsaleAddr = _crowdsaleAddr;
@@ -79,6 +82,7 @@ contract LikeCoin is ERC20 {
     }
 
     function registerContributorPool(address _contributorPoolAddr, uint256 _value) {
+        require(msg.sender == owner);
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
         contributorPoolAddr = _contributorPoolAddr;
@@ -88,6 +92,7 @@ contract LikeCoin is ERC20 {
     }
 
     function registerUserGrowthPools(address[] _poolAddrs) {
+        require(msg.sender == owner);
         require(userGrowthPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
         for (uint i = 0; i < _poolAddrs.length; i++) {
