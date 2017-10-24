@@ -67,7 +67,6 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             const pool = await UserGrowthPool.new(like.address, ownerAddrs, threshold, mintTime, mintValues[i]);
             pools.push(pool);
         }
-        await like.registerUserGrowthPools(pools.map((pool) => pool.address));
     });
 
     it("should deploy the UserGrowthPool contracts correctly", async () => {
@@ -84,7 +83,14 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         }
     });
 
+    it("should forbid non-owner to register UserGrowthPools", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await like.registerUserGrowthPools(pools.map((pool) => pool.address), {from: accounts[1]});
+        }, "should forbid accounts[1] to register UserGrowthPools");
+    });
+
     it("should forbid register UserGrowthPools more than once", async () => {
+        await like.registerUserGrowthPools(pools.map((pool) => pool.address));
         await utils.assertSolidityThrow(async () => {
             await like.registerUserGrowthPools([accounts[0]]);
         }, "should forbid register UserGrowthPools more than once");
