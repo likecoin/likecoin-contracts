@@ -9,37 +9,24 @@ const UserGrowthPool = artifacts.require("./UserGrowthPool.sol");
 const crypto = require("crypto");
 
 const decimalFactor = new BigNumber(10).pow(18);
-const accountInfo = require("../accounts.json");
 
 function coinsToCoinUnits(value) {
     return decimalFactor.times(value);
 }
 
-function hexToBuffer(hexString) {
-    return Buffer.from(hexString.replace("0x", ""), "hex");
-}
-
-function sign(hashHex, privKeyHex) {
-    const hashBuffer = hexToBuffer(hashHex);
-    const signature = ethUtil.ecsign(hashBuffer, hexToBuffer(privKeyHex));
-    const r = ethUtil.bufferToHex(ethUtil.setLengthLeft(signature.r, 32));
-    const s = ethUtil.bufferToHex(ethUtil.setLengthLeft(signature.s, 32));
-    const v = signature.v;
-    return {v, r, s};
-}
-
 const mintGap = 60 * 60 * 24 * 365;
 const mintValues = {
-    0: coinsToCoinUnits(152000000),
-    1: coinsToCoinUnits(136000000),
-    2: coinsToCoinUnits(120000000),
-    3: coinsToCoinUnits(104000000),
-    4: coinsToCoinUnits(88000000),
-    5: coinsToCoinUnits(72000000),
-    6: coinsToCoinUnits(56000000),
+    0: coinsToCoinUnits(250000000),
+    1: coinsToCoinUnits(100000000),
+    2: coinsToCoinUnits(90000000),
+    3: coinsToCoinUnits(80000000),
+    4: coinsToCoinUnits(70000000),
+    5: coinsToCoinUnits(60000000),
+    6: coinsToCoinUnits(50000000),
     7: coinsToCoinUnits(40000000),
-    8: coinsToCoinUnits(24000000),
-    9: coinsToCoinUnits(8000000),
+    8: coinsToCoinUnits(30000000),
+    9: coinsToCoinUnits(20000000),
+    10: coinsToCoinUnits(10000000),
 };
 
 contract("LikeCoin User Growth Pools", (accounts) => {
@@ -47,13 +34,13 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     const mintTimes = [];
     const pools = [];
     const threshold = 3;
-    const owners = [1, 2, 3, 4, 5].map((i) => {
-        return {address: accountInfo[i].address, privKey: accountInfo[i].secretKey};
-    });
-    const ownerAddrs = owners.map((acc) => acc.address);
-    let newOwners;
-    let newOwnerAddrs;
-    let newThreshold;
+    const owners = [1, 2, 3, 4, 5].map((i) => accounts[i]);
+    const newOwners = [5, 6, 7, 8].map((i) => accounts[i]);
+    const newThreshold = 2;
+
+    const unconfirmedPendingProposals = [];
+    const confirmedPendingProposals = [];
+
     before(async () => {
         // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
         // calling testrpcIncreaseTime
@@ -64,7 +51,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         for (let i of Object.keys(mintValues)) {
             const mintTime = start + i * mintGap;
             mintTimes.push(mintTime);
-            const pool = await UserGrowthPool.new(like.address, ownerAddrs, threshold, mintTime, mintValues[i]);
+            const pool = await UserGrowthPool.new(like.address, owners, threshold, mintTime, mintValues[i]);
             pools.push(pool);
         }
     });
@@ -75,7 +62,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             const ownersCount = (await pool.ownersCount()).toNumber();
             assert.equal(ownersCount, owners.length, `pools[${i}] has wrong number of owners`);
             for (let j = 0; j < ownersCount; j++) {
-                assert.equal(await pool.owners(j), owners[j].address, `pools[${i}] has wrong owner at index ${j}`);
+                assert.equal(await pool.owners(j), owners[j], `pools[${i}] has wrong owner at index ${j}`);
             }
             assert.equal((await pool.threshold()).toNumber(), threshold, `pools[${i}] has wrong threshold`);
             assert.equal((await pool.mintTime()).toNumber(), mintTimes[i], `pools[${i}] has wrong mintTime`);
@@ -137,258 +124,278 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         },"Should forbid minting more than once");
     });
 
-    it("should allow transfer with signatures after mintTime", async () => {
+    it("should allow transfer with confirmations", async () => {
         const poolBalanceBefore = await like.balanceOf(pools[0].address);
         const accountBalanceBefore = await like.balanceOf(accounts[1]);
         const value = 123456789;
-        const nonce = 1337;
-        const hash = await pools[0].hashTransfer(nonce, accounts[1], value);
-        const signatures = [0, 3, 4].map((i) => sign(hash, owners[i].privKey));
-        const rs = signatures.map((sig) => sig.r);
-        const ss = signatures.map((sig) => sig.s);
-        const vs = signatures.map((sig) => sig.v);
-        await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value);
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const transferProposal = await utils.solidityEventPromise(pools[0].TransferProposal());
+        const proposalId = transferProposal.args._id;
+        assert.equal(transferProposal.args._proposer, accounts[1], "Wrong proposer address in TransferProposal event");
+        assert.equal(transferProposal.args._to, accounts[1], "Wrong to-address in TransferProposal event");
+        assert(transferProposal.args._value.eq(value), "Wrong value in TransferProposal event");
+        const signers = [1, 2, 5];
+        for (let i = 0; i < threshold; i++) {
+            await pools[0].confirmProposal(proposalId, {from: accounts[signers[i]]});
+            const confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+            assert(confirm.args._id.eq(proposalId), "Wrong proposal ID in confirm event");
+            assert.equal(confirm.args._confirmer, accounts[signers[i]], "Wrong confirmer address in confirm event");
+        }
+        await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        const execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        assert(execution.args._id.eq(proposalId), "Wrong proposal ID in execution event");
+        assert.equal(execution.args._executer, accounts[1], "Wrong proposal ID in execution event");
         const poolBalanceAfter = await like.balanceOf(pools[0].address);
         const accountBalanceAfter = await like.balanceOf(accounts[1]);
         assert(poolBalanceBefore.sub(poolBalanceAfter).eq(value), "pools[0] owned wrong amount of coins after transfer");
         assert(accountBalanceAfter.sub(accountBalanceBefore).eq(value), "accounts[1] owned wrong amount of coins after transfer");
     });
 
-    it("should forbid transferring with invalid signatures", async () => {
-        const usedNonce = 1337;
-        const nonce = 8890;
+    it("should forbid executing transfer proposal without enough confirmations", async () => {
         const value = 234567890;
-        let hash;
-        let signatures;
-        let rs;
-        let ss;
-        let vs;
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
 
-        // random bytes as signature
-        rs = [1, 2, 3].map(() => ethUtil.bufferToHex(crypto.randomBytes(32)));
-        ss = [1, 2, 3].map(() => ethUtil.bufferToHex(crypto.randomBytes(32)));
-        vs = [26, 27, 27];
+        await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value);
-        }, "Should forbid calling transfer by random byte singatures");
+            await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        }, "should forbid executing transfer proposal with only 1 confirmation");
 
-        // signature arrays length != threshold
-        hash = await pools[0].hashTransfer(nonce, accounts[1], value);
-        signatures = [0, 1].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
+        await pools[0].confirmProposal(proposalId, {from: accounts[3]});
         await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value);
-        }, "Should forbid calling transfer with insufficient number of signatures");
-
-        // repeated owner in signature arrays
-        hash = await pools[0].hashTransfer(nonce + 1, accounts[1], value);
-        const repeatedSig = sign(hash, owners[1].privKey);
-        rs.push(repeatedSig.r);
-        ss.push(repeatedSig.s);
-        vs.push(repeatedSig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce + 1], accounts[1], value);
-        }, "Should forbid calling transfer with repeated owner");
-
-        // inconsistent order between signature arrays
-        hash = await pools[0].hashTransfer(nonce, accounts[1], value);
-        signatures = [0, 1, 2].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        [rs[0], rs[1]] = [rs[1], rs[0]];
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value);
-        }, "Should forbid calling transfer with inconsistent order between signature arrays");
-
-        // signatures not for the given parameters
-        hash = await pools[0].hashTransfer(nonce, accounts[1], value);
-        signatures = [0, 1, 2].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[2], value);
-        }, "Should forbid calling transfer with signatures on different set of parameters");
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value + 1);
-        }, "Should forbid calling transfer with signatures on different set of parameters");
-
-        // reuse nonce
-        hash = await pools[0].hashTransfer(usedNonce, accounts[1], value);
-        signatures = [0, 1, 2].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [usedNonce, usedNonce, usedNonce], accounts[1], value);
-        }, "Should forbid calling transfer with used nonce");
-
-        // replay on other functions - don't know how to construct suitable sets of parameters, skip
-        // replay on other pools
-        hash = await pools[0].hashTransfer(nonce, accounts[1], value);
-        signatures = [0, 1, 2].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[1].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[1], value);
-        }, "Should forbid calling transfer with signatures from another pool");
+            await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        }, "should forbid executing transfer proposal with only 2 confirmation");
+        unconfirmedPendingProposals.push(proposalId);
     });
 
-    it("should allow owner B to reuse the nonce owner A used", async () => {
-        // Owner 1, 2 have not used 1337 as nonce
-        const nonces = [8890, 1337, 1337];
-        const value = 234567890;
-        const rs = [];
-        const ss = [];
-        const vs = [];
-        for (let i = 0; i <= 2; i++) {
-            const hash = await pools[0].hashTransfer(nonces[i], accounts[2], value);
-            const sig = sign(hash, owners[i].privKey);
-            rs.push(sig.r);
-            ss.push(sig.s);
-            vs.push(sig.v);
+    it("should allow multiple proposals to run in parallel", async () => {
+        const poolBalanceBefore = await like.balanceOf(pools[0].address);
+        const accountBalanceBefore = await like.balanceOf(accounts[1]);
+
+        const value1 = 345678901;
+        const value2 = 456789012;
+        const value3 = 567890123;
+
+        await pools[0].proposeTransfer(accounts[1], value1, {from: accounts[2]});
+        const proposalId1 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+
+        await pools[0].proposeTransfer(accounts[1], value2, {from: accounts[3]});
+        const proposalId2 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        assert(!proposalId1.eq(proposalId2), "Two proposals have the same ID");
+
+        await pools[0].proposeTransfer(accounts[1], value3, {from: accounts[4]});
+        const proposalId3 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        assert(!proposalId1.eq(proposalId3), "Two proposals have the same ID");
+        assert(!proposalId2.eq(proposalId3), "Two proposals have the same ID");
+
+        let confirm;
+        let execution;
+
+        await pools[0].confirmProposal(proposalId1, {from: accounts[1]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[1], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId2, {from: accounts[2]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[2], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId3, {from: accounts[3]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
+
+        // Out of order
+        await pools[0].confirmProposal(proposalId2, {from: accounts[3]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId3, {from: accounts[4]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[4], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId1, {from: accounts[2]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[2], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
+
+        // Out of order
+        await pools[0].confirmProposal(proposalId3, {from: accounts[5]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[5], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId1, {from: accounts[3]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
+
+        await pools[0].confirmProposal(proposalId2, {from: accounts[4]});
+        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        assert.equal(confirm.args._confirmer, accounts[4], "Wrong confirmer address in confirm event");
+        assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
+
+        await pools[0].executeProposal(proposalId3, {from: accounts[5]});
+        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        assert(execution.args._id.eq(proposalId3), "Wrong proposal ID in execution event");
+        const poolBalanceAfter3 = await like.balanceOf(pools[0].address);
+        const accountBalanceAfter3 = await like.balanceOf(accounts[1]);
+        assert(poolBalanceAfter3.eq(poolBalanceBefore.sub(value3)), "pools[0] owned wrong amount of coins after executing proposal 3");
+        assert(accountBalanceAfter3.eq(accountBalanceBefore.add(value3)), "accounts[1] owned wrong amount of coins after executing proposal 3");
+
+        await pools[0].executeProposal(proposalId1, {from: accounts[3]});
+        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        assert(execution.args._id.eq(proposalId1), "Wrong proposal ID in execution event");
+        const poolBalanceAfter1 = await like.balanceOf(pools[0].address);
+        const accountBalanceAfter1 = await like.balanceOf(accounts[1]);
+        assert(poolBalanceAfter1.eq(poolBalanceAfter3.sub(value1)), "pools[0] owned wrong amount of coins after executing proposal 1");
+        assert(accountBalanceAfter1.eq(accountBalanceAfter3.add(value1)), "accounts[1] owned wrong amount of coins after executing proposal 1");
+
+        await pools[0].executeProposal(proposalId2, {from: accounts[4]});
+        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        assert(execution.args._id.eq(proposalId2), "Wrong proposal ID in execution event");
+        const poolBalanceAfter2 = await like.balanceOf(pools[0].address);
+        const accountBalanceAfter2 = await like.balanceOf(accounts[1]);
+        assert(poolBalanceAfter2.eq(poolBalanceAfter1.sub(value2)), "pools[0] owned wrong amount of coins after executing proposal 2");
+        assert(accountBalanceAfter2.eq(accountBalanceAfter1.add(value2)), "accounts[1] owned wrong amount of coins after executing proposal 2");
+    });
+
+    it("should forbid non-owners to participate in transfer proposal", async () => {
+        const value = 678901234;
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].proposeTransfer(accounts[1], value, {from: accounts[6]});
+        }, "should forbid non-owner to propose transfer proposal");
+
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].confirmProposal(proposalId, {from: accounts[7]});
+        }, "should forbid non-owner to confirm transfer proposal");
+
+        await pools[0].confirmProposal(proposalId, {from: accounts[1]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[2]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[3]});
+
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(proposalId, {from: accounts[8]});
+        }, "should forbid non-owner to execute transfer proposal");
+        confirmedPendingProposals.push(proposalId);
+    });
+
+    it("should forbid duplicated confirmation from the same confirmer", async () => {
+        const value = 789012345;
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        await pools[0].confirmProposal(proposalId, {from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].confirmProposal(proposalId, {from: accounts[1]});
+        }, "should forbid owners to confirm the same proposal more than once");
+        unconfirmedPendingProposals.push(proposalId);
+    });
+
+    it("should forbid duplicated executtion of TransferProposal", async () => {
+        const value = 890123456;
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        await pools[0].confirmProposal(proposalId, {from: accounts[1]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[2]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[3]});
+        await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(proposalId, {from: accounts[2]});
+        }, "should forbid executing the same proposal more than once");
+    });
+
+    let executedSetOwnersProposalId;
+    it("should allow set owners with confirmations", async () => {
+        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[1]});
+        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const proposalId = setOwnersProposal.args._id;
+        assert.equal(setOwnersProposal.args._proposer, accounts[1], "Wrong proposer address in SetOwnersProposal event");
+        const _newOwners = setOwnersProposal.args._newOwners;
+        assert.deepEqual(_newOwners, newOwners, "Wrong newOwners in SetOwnersProposal event");
+        assert.equal(setOwnersProposal.args._newThreshold.toNumber(), newThreshold, "Wrong newThreshold in SetOwnersProposal event");
+        await pools[0].confirmProposal(proposalId, {from: accounts[1]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[2]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[3]});
+        await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        const execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        assert(execution.args._id.eq(proposalId), "Wrong proposal ID in execution event");
+        const ownersCount = (await pools[0].ownersCount()).toNumber();
+        assert.equal(ownersCount, newOwners.length, "pools[0] has wrong number of owners after executing SetOwnersProposal");
+        for (let i = 0; i < ownersCount; i++) {
+            assert.equal(await pools[0].owners(i), newOwners[i], `pools[0] has wrong owner at index ${i} after executing SetOwnersProposal`);
         }
-        await pools[0].transfer(rs, ss, vs, nonces, accounts[2], value);
+        assert.equal((await pools[0].threshold()).toNumber(), newThreshold, "pools[0] has wrong threshold after executing SetOwnersProposal");
+        executedSetOwnersProposalId = proposalId;
     });
 
-    it("should allow setting owners to others using signatures", async () => {
-        let nonce = 9012;
-        newOwners = [5, 6, 7, 8].map((i) => {
-            return {address: accountInfo[i].address, privKey: accountInfo[i].secretKey};
-        });
-        newOwnerAddrs = newOwners.map((acc) => acc.address);
-        newThreshold = 2;
-        let hash = await pools[0].hashSetOwners(nonce, newOwnerAddrs, newThreshold);
-        let signatures = [2, 3, 1].map((i) => sign(hash, owners[i].privKey));
-        let rs = signatures.map((sig) => sig.r);
-        let ss = signatures.map((sig) => sig.s);
-        let vs = signatures.map((sig) => sig.v);
-        await pools[0].setOwners(rs, ss, vs, [nonce, nonce, nonce], newOwnerAddrs, newThreshold);
-        assert.equal(await pools[0].ownersCount(), newOwners.length, "pools[0] has wrong number of owners");
-        for (let i = 0; i < newOwners.length; i++) {
-            assert.equal(await pools[0].owners(i), newOwners[i].address, `pools[0] has wrong owner at index ${i}`);
+    it("should void old owners", async () => {
+        for (let i = 1; i <= 4; i++) {
+            await utils.assertSolidityThrow(async () => {
+                await pools[0].proposeTransfer(accounts[1], 123456789, {from: accounts[i]});
+            }, `should not allow old owner accounts[${i}] to propose TransferProposal`);
+            await utils.assertSolidityThrow(async () => {
+                await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[i]});
+            }, `should not allow old owner accounts[${i}] to propose SetOwnersProposal`);
         }
-        assert.equal(await pools[0].threshold(), newThreshold, "pools[0] has wrong threshold");
-
-        // Test if ownership really transferred
-        // Old threshold with old owner signatures
-        const value = 345678901;
-        nonce = 1023;
-        hash = await pools[0].hashTransfer(nonce, accounts[3], value);
-        signatures = [0, 1, 4].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce, nonce], accounts[3], value);
-        }, "Old owners should not be able to call transfer");
-
-        // New threshold with old owner signatures
-        rs.pop();
-        ss.pop();
-        vs.pop();
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].transfer(rs, ss, vs, [nonce, nonce], accounts[3], value);
-        }, "Old owners should not be able to call transfer");
-
-        signatures = [0, 1].map((i) => sign(hash, newOwners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await pools[0].transfer(rs, ss, vs, [nonce, nonce], accounts[3], value);
     });
 
-    it("should forbid setting owners to others with invalid signatures", async () => {
-        const usedNonce = 1023;
-        const nonce = 1025;
-
-        // I can't find better names, may uncle Bob forgive my sins...
-        const newNewOwners = [7, 8, 9].map((i) => {
-            return {address: accountInfo[i].address, privKey: accountInfo[i].secretKey};
-        });
-        const newNewOwnerAddrs = newNewOwners.map((acc) => acc.address);
-        const newNewThreshold = 1;
-        let hash;
-        let signatures;
-        let rs;
-        let ss;
-        let vs;
-
-        // random bytes as signature
-        rs = [1, 2].map(() => ethUtil.bufferToHex(crypto.randomBytes(32)));
-        ss = [1, 2].map(() => ethUtil.bufferToHex(crypto.randomBytes(32)));
-        vs = [26, 27];
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce, nonce], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners by random byte singatures");
-
-        // signature arrays length != threshold
-        hash = await pools[0].hashSetOwners(nonce, newNewOwnerAddrs, newNewThreshold);
-        signatures = sign(hash, newOwners[0].privKey);
-        rs = [signatures.r];
-        ss = [signatures.s];
-        vs = [signatures.v];
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners with insufficient number of signatures");
-
-        // repeated owner in signature arrays
-        hash = await pools[0].hashSetOwners(nonce + 1, newNewOwnerAddrs, newNewThreshold);
-        const repeatedSig = sign(hash, newOwners[0].privKey);
-        rs.push(repeatedSig.r);
-        ss.push(repeatedSig.s);
-        vs.push(repeatedSig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce, nonce + 1], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners with repeated owner");
-
-        // inconsistent order between signature arrays
-        hash = await pools[0].hashSetOwners(nonce, newNewOwnerAddrs, newNewThreshold);
-        signatures = [0, 1, 2].map((i) => sign(hash, newOwners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        [rs[0], rs[1]] = [rs[1], rs[0]];
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce, nonce], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners with inconsistent order between signature arrays");
-
-        // signatures not for the given parameters
-        hash = await pools[0].hashSetOwners(nonce, newNewOwnerAddrs, newNewThreshold);
-        signatures = [0, 1, 2].map((i) => sign(hash, newOwners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce, nonce], newNewOwnerAddrs, newNewThreshold + 1);
-        }, "Should forbid calling setOwners with signatures on different set of parameters");
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [nonce, nonce], newNewOwnerAddrs.slice(0, 1), newNewThreshold);
-        }, "Should forbid calling setOwners with signatures on different set of parameters");
-
-        // reuse nonce
-        hash = await pools[0].hashSetOwners(usedNonce, newNewOwnerAddrs, newNewThreshold);
-        signatures = [0, 1, 2].map((i) => sign(hash, newOwners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[0].setOwners(rs, ss, vs, [usedNonce, usedNonce], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners with used nonce");
-
-        // replay on other functions - don't know how to construct suitable sets of parameters, skip
-        // replay on other pools
-        hash = await pools[0].hashSetOwners(nonce, newNewOwnerAddrs, newNewThreshold);
-        signatures = [0, 1, 2].map((i) => sign(hash, owners[i].privKey));
-        rs = signatures.map((sig) => sig.r);
-        ss = signatures.map((sig) => sig.s);
-        vs = signatures.map((sig) => sig.v);
-        await utils.assertSolidityThrow(async () => {
-            await pools[1].setOwners(rs, ss, vs, [nonce, nonce, nonce], newNewOwnerAddrs, newNewThreshold);
-        }, "Should forbid calling setOwners with signatures from another pool");
+    it("should void all pending proposals after set owners", async () => {
+        for (let i = 0; i < unconfirmedPendingProposals.length; i++) {
+            await utils.assertSolidityThrow(async () => {
+                await pools[0].confirmProposal(unconfirmedPendingProposals[i], {from: accounts[5]});
+            }, "should not allow confirming old proposals");
+        }
+        for (let i = 0; i < confirmedPendingProposals.length; i++) {
+            await utils.assertSolidityThrow(async () => {
+                await pools[0].executeProposal(confirmedPendingProposals[i], {from: accounts[5]});
+            }, "should not allow executing old proposals");
+        }
     });
+
+    it("should not allow executing set owners without enough confirm", async () => {
+        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const proposalId = setOwnersProposal.args._id;
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(proposalId, {from: accounts[5]});
+        }, "should not allow executing unconfirmed SetOwnersProposal");
+        await pools[0].confirmProposal(proposalId, {from: accounts[5]});
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(proposalId, {from: accounts[5]});
+        }, "should not allow executing unconfirmed SetOwnersProposal");
+    });
+
+    it("should forbid non-owners to participate in set owner proposal", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[9]});
+        }, "should not allow non-owner to propose SetOwnersProposal");
+
+        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const proposalId = setOwnersProposal.args._id;
+
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].confirmProposal(proposalId, {from: accounts[9]});
+        }, "should not allow non-owner to confirm SetOwnersProposal");
+
+        await pools[0].confirmProposal(proposalId, {from: accounts[5]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[6]});
+
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(proposalId, {from: accounts[9]});
+        }, "should not allow non-owner to execute SetOwnersProposal");
+    });
+
+    it("should forbid duplicated executtion of SetOwnersProposal", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].executeProposal(executedSetOwnersProposalId, {from: accounts[5]});
+        }, "should forbid executing the same proposal more than once");
+    });
+
 });

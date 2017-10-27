@@ -9,15 +9,44 @@ contract UserGrowthPool {
     uint public mintTime;
     uint256 public mintValue;
 
-    mapping (address => mapping (uint64 => bool)) usedNonce;
-    // randomly generated code to distinguish signatures of different functions
-    uint32 constant SET_OWNER_CODE = 2086986856;
-    uint32 constant TRANSFER_CODE = 487527886;
-
     // returns a number which is a power of 2, so we can use uint256 and bitwise operations to simulate a set
     mapping (address => uint256) ownerIndex;
 
+    // avoid using 0 as fields in proposals are by default initialized to 0
+    uint64 minApprovedId = 1;
+    uint64 nextId = 1;
+
+    struct Proposal {
+        uint64 id;
+        address proposer;
+        uint8 confirmNeeded;
+        uint256 confirmedTable;
+    }
+    event ProposalConfirmation(uint64 indexed _id, address _confirmer);
+    event ProposalExecution(uint64 indexed _id, address _executer);
+
+    struct TransferInfo {
+        uint64 id;
+        address to;
+        uint256 value;
+    }
+    event TransferProposal(uint64 indexed _id, address _proposer, address _to, uint256 _value);
+
+    struct SetOwnersInfo {
+        uint64 id;
+        address[] newOwners;
+        uint8 newThreshold;
+    }
+    event SetOwnersProposal(uint64 indexed _id, address _proposer, address[] _newOwners, uint8 _newThreshold);
+
+    mapping (uint64 => Proposal) proposals;
+    mapping (uint64 => TransferInfo) transferInfo;
+    mapping (uint64 => SetOwnersInfo) setOwnersInfo;
+
     function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) {
+        require(_owners.length < 256);
+        require(_owners.length > 0);
+        require(_threshold > 0);
         like = LikeCoin(_likeAddr);
         for (uint8 i = 0; i < _owners.length; i++) {
             owners.push(_owners[i]);
@@ -32,70 +61,75 @@ contract UserGrowthPool {
         return owners.length;
     }
 
+    function _nextId() internal returns (uint64 id) {
+        id = nextId;
+        nextId += 1;
+        return id;
+    }
+
     function mint() {
         require(now >= mintTime);
         like.mintForUserGrowthPool(mintValue);
     }
 
-    function hashTransfer(uint64 _nonce, address _to, uint256 _value) constant returns (bytes32) {
-        return keccak256(_nonce, this, TRANSFER_CODE, _to, _value);
+    function proposeTransfer(address _to, uint256 _value) {
+        require(ownerIndex[msg.sender] != 0);
+        uint64 id = _nextId();
+        proposals[id] = Proposal(id, msg.sender, threshold, 0);
+        transferInfo[id] = TransferInfo(id, _to, _value);
+        TransferProposal(id, msg.sender, _to, _value);
     }
 
-    function transfer(bytes32[] _rs, bytes32[] _ss, uint8[] _vs, uint64[] _nonce, address _to, uint256 _value) {
-        require(_rs.length == threshold);
-        require(_ss.length == threshold);
-        require(_vs.length == threshold);
-        require(_nonce.length == threshold);
-        uint256 used = 0;
-        address[] memory sources = new address[](threshold);
-        for (uint8 i = 0; i < threshold; i++) {
-            bytes32 hash = hashTransfer(_nonce[i], _to, _value);
-            address source = ecrecover(hash, _vs[i], _rs[i], _ss[i]);
-            uint256 index = ownerIndex[source];
-            require(index != 0);
-            require((used & index) == 0);
-            require(!usedNonce[source][_nonce[i]]);
-            used |= index;
-            sources[i] = source;
-        }
-        like.transfer(_to, _value);
-        for (i = 0; i < threshold; i++) {
-            usedNonce[sources[i]][_nonce[i]] = true;
-        }
+    function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) {
+        require(ownerIndex[msg.sender] != 0);
+        require(_newOwners.length < 256);
+        require(_newOwners.length > 0);
+        require(_newThreshold > 0);
+        uint64 id = _nextId();
+        proposals[id] = Proposal(id, msg.sender, threshold, 0);
+        setOwnersInfo[id] = SetOwnersInfo(id, _newOwners, _newThreshold);
+        SetOwnersProposal(id, msg.sender, _newOwners, _newThreshold);
     }
 
-    function hashSetOwners(uint64 _nonce, address[] _newOwners, uint8 _newThreshold) constant returns (bytes32) {
-        return keccak256(_nonce, this, SET_OWNER_CODE, _newOwners, _newThreshold);
+    function confirmProposal(uint64 id) {
+        require(id >= minApprovedId);
+        require(proposals[id].id == id);
+        require(proposals[id].confirmNeeded > 0);
+        uint256 index = ownerIndex[msg.sender];
+        require(index != 0);
+        require((proposals[id].confirmedTable & index) == 0);
+        proposals[id].confirmedTable |= index;
+        if (proposals[id].confirmNeeded > 0) {
+            proposals[id].confirmNeeded -= 1;
+        }
+        ProposalConfirmation(id, msg.sender);
     }
 
-    function setOwners(bytes32[] _rs, bytes32[] _ss, uint8[] _vs, uint64[] _nonce, address[] _newOwners, uint8 _newThreshold) {
-        require(_rs.length == threshold);
-        require(_ss.length == threshold);
-        require(_vs.length == threshold);
-        require(_nonce.length == threshold);
-        uint256 used = 0;
-        address[] memory sources = new address[](threshold);
-        for (uint8 i = 0; i < threshold; i++) {
-            bytes32 hash = hashSetOwners(_nonce[i], _newOwners, _newThreshold);
-            address source = ecrecover(hash, _vs[i], _rs[i], _ss[i]);
-            uint256 index = ownerIndex[source];
-            require(index != 0);
-            require((used & index) == 0);
-            require(!usedNonce[source][_nonce[i]]);
-            used |= index;
-            sources[i] = source;
+    function executeProposal(uint64 id) {
+        require(id >= minApprovedId);
+        require(proposals[id].id == id);
+        require(proposals[id].confirmNeeded == 0);
+        uint256 index = ownerIndex[msg.sender];
+        require(index != 0);
+        if (transferInfo[id].id == id) {
+            like.transfer(transferInfo[id].to, transferInfo[id].value);
+            delete transferInfo[id];
+        } else if (setOwnersInfo[id].id == id) {
+            for (uint8 i = 0; i < owners.length; i++) {
+                ownerIndex[owners[i]] = 0;
+            }
+            owners.length = 0;
+            for (i = 0; i < setOwnersInfo[id].newOwners.length; i++) {
+                owners.push(setOwnersInfo[id].newOwners[i]);
+                ownerIndex[setOwnersInfo[id].newOwners[i]] = 1 << i;
+            }
+            threshold = setOwnersInfo[id].newThreshold;
+            minApprovedId = nextId;
+            delete setOwnersInfo[id];
+        } else {
+            throw;
         }
-        for (i = 0; i < owners.length; i++) {
-            ownerIndex[owners[i]] = 0;
-        }
-        owners.length = 0;
-        for (i = 0; i < _newOwners.length; i++) {
-            owners.push(_newOwners[i]);
-            ownerIndex[_newOwners[i]] = 1 << i;
-        }
-        threshold = _newThreshold;
-        for (i = 0; i < threshold; i++) {
-            usedNonce[sources[i]][_nonce[i]] = true;
-        }
+        delete proposals[id];
+        ProposalExecution(id, msg.sender);
     }
 }
