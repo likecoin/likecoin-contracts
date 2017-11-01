@@ -3,7 +3,7 @@ pragma solidity ^0.4.15;
 import "./ERC20.sol";
 
 contract LikeCoin is ERC20 {
-    string constant public name = "Like Coin";
+    string constant public name = "LikeCoin";
     string constant public symbol = "LIKE";
 
     // Synchronized to Ether -> Wei ratio, which is important
@@ -17,16 +17,18 @@ contract LikeCoin is ERC20 {
     address public crowdsaleAddr;
     address public contributorPoolAddr;
     address[] public userGrowthPoolAddrs;
+    uint256 public airdropLimit;
     mapping (address => bool) isUserGrowthPool;
     mapping (address => bool) userGrowthPoolMinted;
 
-    function LikeCoin(uint256 _initialSupply) {
+    function LikeCoin(uint256 _initialSupply, uint256 _airdropLimit) public {
         owner = msg.sender;
         supply = _initialSupply;
-        balances[owner] = _initialSupply;
+        balances[this] = _initialSupply;
+        airdropLimit = _airdropLimit;
     }
 
-    function totalSupply() constant returns (uint256 totalSupply) {
+    function totalSupply() constant returns (uint256) {
         return supply;
     }
 
@@ -69,6 +71,20 @@ contract LikeCoin is ERC20 {
         balances[msg.sender] -= _value;
         supply -= _value;
         Transfer(msg.sender, 0x0, _value);
+    }
+
+    function airdrop(address[] _addrs, uint256 _value) public {
+        require(msg.sender == owner);
+        require(_addrs.length > 0);
+        require(_value > 0);
+        uint256 total = _addrs.length * _value;
+        require(total / _addrs.length == _value);
+        require(balances[this] >= total);
+        for (uint i = 0; i < _addrs.length; i++) {
+            balances[_addrs[i]] += _value;
+            Transfer(this, _addrs[i], _value);
+        }
+        balances[this] -= total;
     }
 
     function registerCrowdsales(address _crowdsaleAddr, uint256 _value) {
