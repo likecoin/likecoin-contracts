@@ -127,7 +127,7 @@ contract UserGrowthPool {
             minApprovedId = nextId;
             delete setOwnersInfo[id];
         } else {
-            throw;
+            revert();
         }
         delete proposals[id];
         ProposalExecution(id, msg.sender);
