@@ -2,11 +2,9 @@
 /* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
-const ethUtil = require("ethereumjs-util");
 const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 const UserGrowthPool = artifacts.require("./UserGrowthPool.sol");
-const crypto = require("crypto");
 
 const decimalFactor = new BigNumber(10).pow(18);
 
