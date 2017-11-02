@@ -43,21 +43,21 @@ contract UserGrowthPool {
     mapping (uint64 => TransferInfo) transferInfo;
     mapping (uint64 => SetOwnersInfo) setOwnersInfo;
 
-    function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) {
+    function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) public {
         require(_owners.length < 256);
         require(_owners.length > 0);
         require(_threshold > 0);
         like = LikeCoin(_likeAddr);
         for (uint8 i = 0; i < _owners.length; i++) {
             owners.push(_owners[i]);
-            ownerIndex[_owners[i]] = 1 << i;
+            ownerIndex[_owners[i]] = uint256(1) << i;
         }
         threshold = _threshold;
         mintTime = _mintTime;
         mintValue = _mintValue;
     }
 
-    function ownersCount() constant returns (uint) {
+    function ownersCount() public constant returns (uint) {
         return owners.length;
     }
 
@@ -67,12 +67,12 @@ contract UserGrowthPool {
         return id;
     }
 
-    function mint() {
+    function mint() public {
         require(now >= mintTime);
         like.mintForUserGrowthPool(mintValue);
     }
 
-    function proposeTransfer(address _to, uint256 _value) {
+    function proposeTransfer(address _to, uint256 _value) public {
         require(ownerIndex[msg.sender] != 0);
         uint64 id = _nextId();
         proposals[id] = Proposal(id, msg.sender, threshold, 0);
@@ -80,7 +80,7 @@ contract UserGrowthPool {
         TransferProposal(id, msg.sender, _to, _value);
     }
 
-    function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) {
+    function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) public {
         require(ownerIndex[msg.sender] != 0);
         require(_newOwners.length < 256);
         require(_newOwners.length > 0);
@@ -91,7 +91,7 @@ contract UserGrowthPool {
         SetOwnersProposal(id, msg.sender, _newOwners, _newThreshold);
     }
 
-    function confirmProposal(uint64 id) {
+    function confirmProposal(uint64 id) public {
         require(id >= minApprovedId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded > 0);
@@ -105,7 +105,7 @@ contract UserGrowthPool {
         ProposalConfirmation(id, msg.sender);
     }
 
-    function executeProposal(uint64 id) {
+    function executeProposal(uint64 id) public {
         require(id >= minApprovedId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded == 0);
@@ -121,7 +121,7 @@ contract UserGrowthPool {
             owners.length = 0;
             for (i = 0; i < setOwnersInfo[id].newOwners.length; i++) {
                 owners.push(setOwnersInfo[id].newOwners[i]);
-                ownerIndex[setOwnersInfo[id].newOwners[i]] = 1 << i;
+                ownerIndex[setOwnersInfo[id].newOwners[i]] = uint256(1) << i;
             }
             threshold = setOwnersInfo[id].newThreshold;
             minApprovedId = nextId;
