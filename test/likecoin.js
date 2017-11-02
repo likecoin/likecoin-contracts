@@ -1,5 +1,5 @@
 /* eslint-env mocha, node */
-/* global artifacts, contract, assert */
+/* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
 const BigNumber = require("bignumber.js");
@@ -116,6 +116,27 @@ contract("LikeCoin", (accounts) => {
         assert((await like.balanceOf(accounts[0])).eq(balance0Before.sub(toBurn)), "Wrong amount of coins remaining after burning");
         assert((await like.totalSupply()).eq(supplyBefore.sub(toBurn)), "Wrong amount of supply remaining after burning");
     });
+
+    it("should transfer and lock correctly", async () => {
+        const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
+        await like.registerCrowdsales(accounts[0], 0, unlockTime);
+        const balance0Before = await like.balanceOf(accounts[0]);
+        const balance1 = await like.balanceOf(accounts[1]);
+        assert(!balance1.eq(0), "Banalce in accounts[1] is 0, please check test case");
+        await like.transferAndLock(accounts[0], balance1, {from: accounts[1]});
+        assert((await like.balanceOf(accounts[0])).eq(balance0Before.add(balance1)), "Wrong amount of coins in accounts[0] after transferAndLock");
+        assert((await like.balanceOf(accounts[1])).eq(0), "Wrong amount of coins in accounts[1] after transferAndLock");
+        await utils.assertSolidityThrow(async () => {
+            await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
+        }, "Should not be able to transfer locked part in balance before unlockTime");
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        await utils.testrpcIncreaseTime(unlockTime + 10 - now);
+        await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
+        assert(!(await like.balanceOf(accounts[0])).eq(0), "accounts[0] has no balance left before transferAndLock, please check test case");
+        await utils.assertSolidityThrow(async () => {
+            await like.transferAndLock(accounts[1], 1, {from: accounts[0]});
+        }, "Should not be able to transferAndLock after unlockTime");
+    });
 });
 
 contract("LikeCoinEvents", (accounts) => {
@@ -163,7 +184,8 @@ contract("LikeCoinEvents", (accounts) => {
 
     const crowdsaleAmount = 100000;
     it(`should emit Transfer event after minting for crowdsale`, async () => {
-        await like.registerCrowdsales(accounts[0], crowdsaleAmount);
+        const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 1000000;
+        await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
         const event = await utils.solidityEventPromise(like.Transfer());
         assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
@@ -187,5 +209,15 @@ contract("LikeCoinEvents", (accounts) => {
         assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
+    });
+
+    it("should emit TransferLocked event after transfer and lock", async () => {
+        const balance = await like.balanceOf(accounts[0]);
+        assert(!balance.eq(0), "Banalce in accounts[0] is 0, please check test case");
+        await like.transferAndLock(accounts[1], balance, {from: accounts[0]});
+        const event = await utils.solidityEventPromise(like.TransferLocked());
+        assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(balance), "Transfer event has wrong value on field '_value'");
     });
 });
