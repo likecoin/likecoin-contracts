@@ -33,7 +33,7 @@ contract LikeCrowdsale {
         require(!privateFundFinalized);
         require(_value > 0);
         require(like.balanceOf(this) >= _value);
-        like.transfer(_addr, _value);
+        like.transferAndLock(_addr, _value);
     }
 
     function finalizePrivateFund() {
