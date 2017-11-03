@@ -3,7 +3,7 @@ pragma solidity ^0.4.15;
 import "./LikeCoin.sol";
 
 contract UserGrowthPool {
-    LikeCoin like;
+    LikeCoin public like;
     address[] public owners;
     uint8 public threshold;
     uint public mintTime;
