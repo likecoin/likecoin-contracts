@@ -160,4 +160,32 @@ contract("LikeCoinEvents", (accounts) => {
         assert.equal(event.args._to, 0x0, "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(burnAmount), "Transfer event has wrong value on field '_value'");
     });
+
+    const crowdsaleAmount = 100000;
+    it(`should emit Transfer event after minting for crowdsale`, async () => {
+        await like.registerCrowdsales(accounts[0], crowdsaleAmount);
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(crowdsaleAmount), "Transfer event has wrong value on field '_value'");
+    });
+
+    const contributorPoolAmount = 200000;
+    it(`should emit Transfer event after minting for contributor pool`, async () => {
+        await like.registerContributorPool(accounts[0], contributorPoolAmount);
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(contributorPoolAmount), "Transfer event has wrong value on field '_value'");
+    });
+
+    const userGrowthPoolAmount = 300000;
+    it(`should emit Transfer event after minting for user growth pool`, async () => {
+        await like.registerUserGrowthPools([accounts[0]]);
+        await like.mintForUserGrowthPool(userGrowthPoolAmount);
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
+    });
 });
