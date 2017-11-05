@@ -13,10 +13,11 @@ function coinsToCoinUnits(value) {
 
 contract("LikeCoin", (accounts) => {
     const initialAmount = coinsToCoinUnits(10000);
+    const airdropLimit = initialAmount.div(10);
     let like;
 
     before(async () => {
-        like = await LikeCoin.new(initialAmount, initialAmount);
+        like = await LikeCoin.new(initialAmount, airdropLimit);
     });
 
     it(`should set totalSupply correctly`, async () => {
@@ -24,11 +25,27 @@ contract("LikeCoin", (accounts) => {
         assert(supply.eq(initialAmount), `total supply should be set to ${initialAmount} units of coins`);
     });
 
-    it(`should put coins into account[0] by airdrop`, async () => {
-        // hack
-        await like.airdrop([accounts[0]], initialAmount);
-        const balance = await like.balanceOf(accounts[0]);
-        assert(balance.eq(initialAmount), `${initialAmount} units of coins should be put in account[0]`);
+    it(`should airdrop coins into accounts`, async () => {
+        await like.airdrop([accounts[0], accounts[1], accounts[2]], airdropLimit);
+        assert((await like.balanceOf(accounts[0])).eq(airdropLimit), `accounts[0] owns wrong amount of coins after airdrop`);
+        assert((await like.balanceOf(accounts[1])).eq(airdropLimit), `accounts[1] owns wrong amount of coins after airdrop`);
+        assert((await like.balanceOf(accounts[2])).eq(airdropLimit), `accounts[2] owns wrong amount of coins after airdrop`);
+    });
+
+    it(`should forbid airdroping coins more than limit`, async () => {
+        await utils.assertSolidityThrow(async () => {
+            await like.airdrop([accounts[0]], airdropLimit.add(1));
+        }, "Airdroping more than limit should be forbidden");
+    });
+
+    it(`should forbid airdroping coins more than remaining`, async () => {
+        const remaining = initialAmount.sub(airdropLimit.times(3));
+        const airdropAmount = remaining.div(8).floor().add(1);
+        assert(airdropAmount.lt(airdropLimit), "Airdrop amount is greater than airdrop limit, please check test case");
+        assert(airdropAmount.times(8).gt(remaining), "Total airdrop amount is less than remaining, please check test case");
+        await utils.assertSolidityThrow(async () => {
+            await like.airdrop([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount);
+        }, "Airdroping more than remaining should be forbidden");
     });
 
     const transferAmount = 314;
@@ -88,6 +105,17 @@ contract("LikeCoin", (accounts) => {
             await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0.add(1), {from: accounts[1]});
         }, "transferFrom exceeding allowance should be forbidden");
     });
+
+    it("should burn correct amount of coins", async () => {
+        const supplyBefore = await like.totalSupply();
+        const balance0Before = await like.balanceOf(accounts[0]);
+        const toBurn = balance0Before.div(2).floor();
+        assert(!balance0Before.eq(0), "Banalce in accounts[0] is 0 before buring, please check test case");
+        assert(!toBurn.eq(0), "Burning amount is 0, please check test case");
+        await like.burn(toBurn);
+        assert((await like.balanceOf(accounts[0])).eq(balance0Before.sub(toBurn)), "Wrong amount of coins remaining after burning");
+        assert((await like.totalSupply()).eq(supplyBefore.sub(toBurn)), "Wrong amount of supply remaining after burning");
+    });
 });
 
 contract("LikeCoinEvents", (accounts) => {
@@ -96,8 +124,14 @@ contract("LikeCoinEvents", (accounts) => {
 
     before(async () => {
         like = await LikeCoin.new(initialAmount, initialAmount);
-        // hack
+    });
+
+    it("should emit Transfer event after transaction", async () => {
         await like.airdrop([accounts[0]], initialAmount);
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, like.address, "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(initialAmount), "Transfer event has wrong value on field '_value'");
     });
 
     const transferAmount = 271;
@@ -116,5 +150,14 @@ contract("LikeCoinEvents", (accounts) => {
         assert.equal(approvalEvent.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
         assert.equal(approvalEvent.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
         assert(approvalEvent.args._value.eq(allowance), "Approval event has wrong value on field '_value'");
+    });
+
+    const burnAmount = 161;
+    it(`should emit Transfer event after burn`, async () => {
+        await like.burn(burnAmount);
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, 0x0, "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(burnAmount), "Transfer event has wrong value on field '_value'");
     });
 });

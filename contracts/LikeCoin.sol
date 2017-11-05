@@ -77,6 +77,7 @@ contract LikeCoin is ERC20 {
         require(msg.sender == owner);
         require(_addrs.length > 0);
         require(_value > 0);
+        require(_value <= airdropLimit);
         uint256 total = _addrs.length * _value;
         require(total / _addrs.length == _value);
         require(balances[this] >= total);
