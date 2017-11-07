@@ -2,20 +2,27 @@ const Web3 = require("web3");
 const net = require("net");
 
 const BigNumber = require("bignumber.js");
+
+// factor to multiply for both LIKE->Like units and Ether->Weis
 const decimalFactor = new BigNumber(10).pow(18);
 
 const lakoo0 = "0x81F9B6c7129CEe90feD5Df241fA6dC4F88a19699";
 const lakoo1 = "0x774C5e98Df8D00Dadd4C93e671cC57c006AdCA2b";
 const lakoo2 = "0x62C588dD46BF03aff90c700b4Ed255D1086E7A8b";
 
+// Owners of the ContributorPool and UserGrowthPool contracts
 const owners = [lakoo0, lakoo1, lakoo2];
 
+// Owners of the ContributorPool and UserGrowthPool contracts
 const deployer = lakoo0;
 const gasPrice = "1000000000"; // 1 Gwei
 const gasLimit = 4000000;
+
+// The parameters of the contracts
 const deployInfo = {
     initialSupply: decimalFactor.times(50000000),
     airdropLimit: decimalFactor.times(10),
+    // Date.parse returns Unix epoch in milliseconds, so need to divide by 1000
     privateFundUnlockTime: Math.floor(Date.parse("2017-11-03T17:00:00+0800") / 1000),
 
     crowdsaleStart: Math.floor(Date.parse("2017-11-01T16:15:00+0800") / 1000),
@@ -31,6 +38,7 @@ const deployInfo = {
         value: decimalFactor.times(200000000)
     },
 
+    // UserGrowthPool parameters: [mintTime, mintValue]
     usergrowthpool: [
         [Math.floor(Date.parse("2017-11-03T16:30:00+0800") / 1000), decimalFactor.times(200000000)],
         [Math.floor(Date.parse("2017-11-03T16:40:00+0800") / 1000), decimalFactor.times(100000000)],
@@ -46,8 +54,12 @@ const deployInfo = {
     ].map((info) => ({ owners, threshold: 2, mintTime: info[0], mintValue: info[1] }))
 };
 
+// IPC or RPC socket address
+// See http://web3js.readthedocs.io/en/1.0/web3.html#setprovider
 const web3 = new Web3("/Users/Chung/Library/Ethereum/geth.ipc", net);
 
+// Below this line is the deployment process, should not need to be modified
+// May add more below, e.g. addPrivateFund
 const LikeCoinBuild = require("./build/contracts/LikeCoin.json");
 const LikeCrowdsaleBuild = require("./build/contracts/LikeCrowdsale.json");
 const ContributorPoolBuild = require("./build/contracts/ContributorPool.json");
