@@ -32,6 +32,12 @@ contract("LikeCoin", (accounts) => {
         assert((await like.balanceOf(accounts[2])).eq(airdropLimit), `accounts[2] owns wrong amount of coins after airdrop`);
     });
 
+    it(`should forbid non-owner to airdrop`, async () => {
+        await utils.assertSolidityThrow(async () => {
+            await like.airdrop([accounts[0]], airdropLimit, {from: accounts[1]});
+        }, "Airdroping from non-owner should be forbidden");
+    });
+
     it(`should forbid airdroping coins more than limit`, async () => {
         await utils.assertSolidityThrow(async () => {
             await like.airdrop([accounts[0]], airdropLimit.add(1));
@@ -39,13 +45,22 @@ contract("LikeCoin", (accounts) => {
     });
 
     it(`should forbid airdroping coins more than remaining`, async () => {
-        const remaining = initialAmount.sub(airdropLimit.times(3));
+        const remaining = await like.balanceOf(like.address);
         const airdropAmount = remaining.div(8).floor().add(1);
         assert(airdropAmount.lt(airdropLimit), "Airdrop amount is greater than airdrop limit, please check test case");
         assert(airdropAmount.times(8).gt(remaining), "Total airdrop amount is less than remaining, please check test case");
         await utils.assertSolidityThrow(async () => {
             await like.airdrop([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount);
         }, "Airdroping more than remaining should be forbidden");
+    });
+
+    it(`should allow airdroping exactly all the remaining LIKE`, async () => {
+        const remaining = await like.balanceOf(like.address);
+        const airdropAmount = remaining.div(8).floor();
+        assert(airdropAmount.lt(airdropLimit), "Airdrop amount is greater than airdrop limit, please check test case");
+        assert(airdropAmount.times(8).eq(remaining), "Total airdrop amount does not equal to remaining, please check test case");
+        await like.airdrop([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount);
+        assert((await like.balanceOf(like.address)).eq(0), "Still have some LIKE remaining, please check test case");
     });
 
     const transferAmount = 314;
@@ -106,6 +121,38 @@ contract("LikeCoin", (accounts) => {
         }, "transferFrom exceeding allowance should be forbidden");
     });
 
+    it("should allow transfer all allowance in once", async () => {
+        const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1]));
+        await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0, {from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await like.transferFrom(accounts[0], accounts[2], 1, {from: accounts[1]});
+        }, "Allowance should be all consumed already");
+    });
+
+    it("should forbid transfer 0 LIKE", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await like.transfer(accounts[1], 0, {from: accounts[0]});
+        }, "Transferring 0 LIKE should be forbidden");
+    });
+
+    it("should allow transfer all balance", async () => {
+        const balance = await like.balanceOf(accounts[0]);
+        await like.transfer(accounts[1], balance, {from: accounts[0]});
+    });
+
+    it("should reset allowance correctly", async () => {
+        await like.approve(accounts[1], 1000, {from: accounts[2]});
+        await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
+        await like.approve(accounts[1], 1, {from: accounts[2]});
+        assert((await like.allowance(accounts[2], accounts[1])).eq(1), "Allowance is not correctly reset to 1 unit");
+        await utils.assertSolidityThrow(async () => {
+            await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
+        }, "transferFrom should fail after resetting allowance to lower than the call value");
+        await like.approve(accounts[1], 1000, {from: accounts[2]});
+        assert((await like.allowance(accounts[2], accounts[1])).eq(1000), "Allowance is not correctly reset to 1000 units");
+        await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
+    });
+
     it("should burn correct amount of coins", async () => {
         const supplyBefore = await like.totalSupply();
         const balance0Before = await like.balanceOf(accounts[0]);
@@ -129,6 +176,8 @@ contract("LikeCoin", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
         }, "Should not be able to transfer locked part in balance before unlockTime");
+        await like.transfer(accounts[1], balance0Before, {from: accounts[0]});
+        await like.transfer(accounts[0], balance0Before, {from: accounts[1]});
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(unlockTime + 10 - now);
         await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
