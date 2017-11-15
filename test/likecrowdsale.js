@@ -37,7 +37,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         4: buyCoins[4].div(coinsPerEth)
     };
 
-    const unlockTime = 0x7FFFFFFF;
+    let unlockTime;
     let start;
     let end;
     let like;
@@ -50,6 +50,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         start = now + 1000;
         end = start + crowdsaleLength;
+        unlockTime = end + 10000;
         like = await LikeCoin.new(0, 0);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
     });
@@ -123,6 +124,14 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await crowdsale.addPrivateFund(accounts[7], 100000);
         }, "should forbid adding private fund after finalizing private fund");
+    });
+
+    it("should lock private fund until unlock time", async () => {
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        assert.isBelow(now, unlockTime, "Blocktime is already after unlock time, please adjust test case");
+        await utils.assertSolidityThrow(async () => {
+            await like.transfer(accounts[7], 100, {from: accounts[5]});
+        }, "should lock private fund until unlock time");
     });
 
     it("should forbid buying coins before crowdsale starts", async () => {
@@ -242,7 +251,17 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const anotherCrowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
         await utils.assertSolidityThrow(async () => {
             await like.registerCrowdsales(anotherCrowdsale.address, hardCap, unlockTime);
-        },"Registering another crowdsale contract should be forbidden");
+        }, "Registering another crowdsale contract should be forbidden");
+    });
+
+    it("should handle locking of private funds properly", async () => {
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        assert.isBelow(now, unlockTime, "Blocktime is already after unlock time, please adjust test case");
+        await utils.assertSolidityThrow(async () => {
+            await like.transfer(accounts[7], 100, {from: accounts[5]});
+        }, "should lock private fund until unlock time");
+        await utils.testrpcIncreaseTime(unlockTime + 10 - now);
+        await like.transfer(accounts[7], 100, {from: accounts[5]});
     });
 });
 
