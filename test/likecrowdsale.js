@@ -82,6 +82,12 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         assert(balance.eq(hardCap), `The crowdsale contract should own ${hardCap.toFixed()} units of coins`);
     });
 
+    it("should forbid registering crowdsale contract again", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
+        }, "Can register crowdsale contract once only");
+    });
+
     it("should add private fund correctly", async () => {
         const remaining1 = await like.balanceOf(crowdsale.address);
         await crowdsale.addPrivateFund(accounts[5], privateFunds[5]);
