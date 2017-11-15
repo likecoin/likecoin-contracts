@@ -47,6 +47,7 @@ contract UserGrowthPool {
         require(_owners.length < 256);
         require(_owners.length > 0);
         require(_threshold > 0);
+        require(_owners.length >= _threshold);
         like = LikeCoin(_likeAddr);
         for (uint8 i = 0; i < _owners.length; i++) {
             owners.push(_owners[i]);
@@ -85,6 +86,7 @@ contract UserGrowthPool {
         require(_newOwners.length < 256);
         require(_newOwners.length > 0);
         require(_newThreshold > 0);
+        require(_newOwners.length >= _newThreshold);
         uint64 id = _nextId();
         proposals[id] = Proposal(id, msg.sender, threshold, 0);
         setOwnersInfo[id] = SetOwnersInfo(id, _newOwners, _newThreshold);
