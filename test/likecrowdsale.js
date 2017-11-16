@@ -90,16 +90,20 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
 
     it("should add private fund correctly", async () => {
         const remaining1 = await like.balanceOf(crowdsale.address);
-        await crowdsale.addPrivateFund(accounts[5], privateFunds[5]);
+        await crowdsale.addPrivateFund(accounts[5], privateFunds[5].sub(100));
         const remaining2 = await like.balanceOf(crowdsale.address);
         const account5Coins = await like.balanceOf(accounts[5]);
-        assert(remaining2.eq(remaining1.sub(privateFunds[5])), "Wrong remaining coins after adding private fund");
-        assert(account5Coins.eq(privateFunds[5]), "Wrong amount of coins on accounts[5] after adding private fund");
+        assert(remaining2.eq(remaining1.sub(privateFunds[5].sub(100))), "Wrong remaining coins after adding private fund");
+        assert(account5Coins.eq(privateFunds[5].sub(100)), "Wrong amount of coins on accounts[5] after adding private fund (1st time)");
         await crowdsale.addPrivateFund(accounts[6], privateFunds[6]);
         const remaining3 = await like.balanceOf(crowdsale.address);
         const account6Coins = await like.balanceOf(accounts[6]);
         assert(remaining3.eq(remaining2.sub(privateFunds[6])), "Wrong remaining coins after adding private fund");
         assert(account6Coins.eq(privateFunds[6]), "Wrong amount of coins on accounts[6] after adding private fund");
+        await crowdsale.addPrivateFund(accounts[5], 100);
+        const remaining4 = await like.balanceOf(crowdsale.address);
+        assert(remaining4.eq(remaining3.sub(100)), "Wrong remaining coins after adding private fund");
+        assert((await like.balanceOf(accounts[5])).eq(privateFunds[5]), "Wrong amount of coins on accounts[5] after adding private fund (2nd time)");
     });
 
     it("should forbid adding private fund more than remaining coins", async () => {
@@ -326,6 +330,12 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
     it("should allow buying exactly all remaining coins", async () => {
         await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2] });
         assert.equal((await like.balanceOf(crowdsale.address)).toNumber(), 0, "Still have coins remaining, please adjust test case");
+    });
+
+    it("should forbid buying coins when no coin remains", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: 1 });
+        }, "Should not be able to buy coins when no coin remains");
     });
 
     it("should allow crowdsale to end early when meeting hardCap", async () => {
