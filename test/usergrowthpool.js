@@ -14,7 +14,7 @@ function coinsToCoinUnits(value) {
 
 const mintGap = 60 * 60 * 24 * 365;
 const mintValues = {
-    0: coinsToCoinUnits(250000000),
+    0: coinsToCoinUnits(200000000),
     1: coinsToCoinUnits(100000000),
     2: coinsToCoinUnits(90000000),
     3: coinsToCoinUnits(80000000),
@@ -66,6 +66,20 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             assert.equal((await pool.mintTime()).toNumber(), mintTimes[i], `pools[${i}] has wrong mintTime`);
             assert((await pool.mintValue()).eq(mintValues[i]), `pools[${i}] has wrong mintValue`);
         }
+    });
+
+    it("should forbid invalid number of owners and threshold values when deploying", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await UserGrowthPool.new(like.address, [], 0, mintTimes[0], mintValues[0]);
+        }, "should forbid deploying UserGrowthPool contract with no owners");
+        await utils.assertSolidityThrow(async () => {
+            await UserGrowthPool.new(like.address, [accounts[0], accounts[1]], 3, mintTimes[0], mintValues[0]);
+        }, "should forbid deploying UserGrowthPool contract with threshold value larger than number of owners");
+        await utils.assertSolidityThrow(async () => {
+            await UserGrowthPool.new(like.address, [accounts[0], accounts[1]], 0, mintTimes[0], mintValues[0]);
+        }, "should forbid deploying UserGrowthPool contract with threshold value 0");
+        await UserGrowthPool.new(like.address, [accounts[0], accounts[1]], 2, mintTimes[0], mintValues[0]);
+        await UserGrowthPool.new(like.address, [accounts[0], accounts[1]], 1, mintTimes[0], mintValues[0]);
     });
 
     it("should forbid non-owner to register UserGrowthPools", async () => {
@@ -295,7 +309,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         unconfirmedPendingProposals.push(proposalId);
     });
 
-    it("should forbid duplicated executtion of TransferProposal", async () => {
+    it("should forbid duplicated execution of TransferProposal", async () => {
         const value = 890123456;
         await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
         const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
@@ -306,6 +320,19 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await pools[0].executeProposal(proposalId, {from: accounts[2]});
         }, "should forbid executing the same proposal more than once");
+    });
+
+    it("should forbid confirming TransferProposal more than required", async () => {
+        const value = 901234567;
+        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        await pools[0].confirmProposal(proposalId, {from: accounts[2]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[3]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[4]});
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].confirmProposal(proposalId, {from: accounts[5]});
+        }, "should forbid confirming TransferProposal more than required");
+        await pools[0].executeProposal(proposalId, {from: accounts[1]});
     });
 
     let executedSetOwnersProposalId;
@@ -390,10 +417,36 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         }, "should not allow non-owner to execute SetOwnersProposal");
     });
 
-    it("should forbid duplicated executtion of SetOwnersProposal", async () => {
+    it("should forbid duplicated execution of SetOwnersProposal", async () => {
         await utils.assertSolidityThrow(async () => {
             await pools[0].executeProposal(executedSetOwnersProposalId, {from: accounts[5]});
         }, "should forbid executing the same proposal more than once");
     });
 
+
+    it("should forbid confirming SetOwnersProposal more than required", async () => {
+        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const proposalId = setOwnersProposal.args._id;
+        await pools[0].confirmProposal(proposalId, {from: accounts[6]});
+        await pools[0].confirmProposal(proposalId, {from: accounts[7]});
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].confirmProposal(proposalId, {from: accounts[8]});
+        }, "should forbid confirming SetOwnersProposal more than required");
+        await pools[0].executeProposal(proposalId, {from: accounts[5]});
+    });
+
+    it("should forbid invalid number of owners and threshold values when proposing SetOwnersProposal", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].proposeSetOwners([], 0, {from: accounts[5]});
+        }, "should forbid proposing setOwnersProposal with no owners");
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].proposeSetOwners([accounts[0], accounts[1]], 3, {from: accounts[5]});
+        }, "should forbid proposing setOwnersProposal with threshold value larger than number of owners");
+        await utils.assertSolidityThrow(async () => {
+            await pools[0].proposeSetOwners([accounts[0], accounts[1]], 0, {from: accounts[5]});
+        }, "should forbid proposing setOwnersProposal with threshold value 0");
+        await pools[0].proposeSetOwners([accounts[0], accounts[1]], 2, {from: accounts[5]});
+        await pools[0].proposeSetOwners([accounts[0], accounts[1]], 1, {from: accounts[5]});
+    });
 });
