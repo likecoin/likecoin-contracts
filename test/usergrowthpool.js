@@ -2,15 +2,10 @@
 /* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
+const coinsToCoinUnits = utils.coinsToCoinUnits;
 const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 const UserGrowthPool = artifacts.require("./UserGrowthPool.sol");
-
-const decimalFactor = new BigNumber(10).pow(18);
-
-function coinsToCoinUnits(value) {
-    return decimalFactor.times(value);
-}
 
 const mintGap = 60 * 60 * 24 * 365;
 const mintValues = {
@@ -448,5 +443,26 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         }, "should forbid proposing setOwnersProposal with threshold value 0");
         await pools[0].proposeSetOwners([accounts[0], accounts[1]], 2, {from: accounts[5]});
         await pools[0].proposeSetOwners([accounts[0], accounts[1]], 1, {from: accounts[5]});
+    });
+});
+
+contract("LikeCoin User Growth Pools Overflow", (accounts) => {
+    it("should forbid minting with values overflowing the total supply", async () => {
+        // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
+        // calling testrpcIncreaseTime
+        await utils.testrpcIncreaseTime(1);
+        const mintValue0 = new BigNumber(2).pow(256).sub(1);
+        const mintValue1 = 1;
+        const like = await LikeCoin.new(0, 0);
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        const mintTime = now + 1000;
+        const pool0 = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValue0);
+        const pool1 = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValue1);
+        await like.registerUserGrowthPools([pool0.address, pool1.address]);
+        await utils.testrpcIncreaseTime(mintTime + 1 - now);
+        await pool0.mint();
+        await utils.assertSolidityThrow(async () => {
+            await pool1.mint();
+        }, "should forbid minting with values overflowing the total supply");
     });
 });

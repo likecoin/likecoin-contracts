@@ -3,11 +3,11 @@ pragma solidity ^0.4.18;
 import "./LikeCoin.sol";
 
 contract UserGrowthPool {
-    LikeCoin public like;
+    LikeCoin public like = LikeCoin(0x0);
     address[] public owners;
-    uint8 public threshold;
-    uint public mintTime;
-    uint256 public mintValue;
+    uint8 public threshold = 0;
+    uint public mintTime = 0;
+    uint256 public mintValue = 0;
 
     // returns a number which is a power of 2, so we can use uint256 and bitwise operations to simulate a set
     mapping (address => uint256) ownerIndex;
