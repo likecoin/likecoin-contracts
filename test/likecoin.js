@@ -2,11 +2,12 @@
 /* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
+const coinsToCoinUnits = utils.coinsToCoinUnits;
 const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 
 contract("LikeCoin", (accounts) => {
-    const initialAmount = utils.coinsToCoinUnits(10000);
+    const initialAmount = coinsToCoinUnits(10000);
     const airdropLimit = initialAmount.div(10);
     let like;
 
@@ -190,7 +191,7 @@ contract("LikeCoin", (accounts) => {
 });
 
 contract("LikeCoinEvents", (accounts) => {
-    const initialAmount = utils.coinsToCoinUnits(10000);
+    const initialAmount = coinsToCoinUnits(10000);
     let like;
 
     before(async () => {

@@ -42,7 +42,6 @@ contract LikeCoin is ERC20 {
     function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
         if (unlockTime != 0 && now >= unlockTime && lockedBalances[_from] > 0) {
             balances[_from] += lockedBalances[_from];
-            // lockedBalances[_from] = 0;
             delete lockedBalances[_from];
         }
         require(balances[_from] >= _value);
