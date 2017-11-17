@@ -9,15 +9,15 @@ contract LikeCoin is ERC20 {
     // Synchronized to Ether -> Wei ratio, which is important
     uint8 constant public decimals = 18;
 
-    uint256 public supply;
+    uint256 public supply = 0;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
 
-    address public owner;
-    address public crowdsaleAddr;
-    address public contributorPoolAddr;
+    address public owner = 0x0;
+    address public crowdsaleAddr = 0x0;
+    address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
-    uint256 public airdropLimit;
+    uint256 public airdropLimit = 0;
     mapping (address => bool) isUserGrowthPool;
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
@@ -42,7 +42,8 @@ contract LikeCoin is ERC20 {
     function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
         if (unlockTime != 0 && now >= unlockTime && lockedBalances[_from] > 0) {
             balances[_from] += lockedBalances[_from];
-            lockedBalances[_from] = 0;
+            // lockedBalances[_from] = 0;
+            delete lockedBalances[_from];
         }
         require(balances[_from] >= _value);
         require(balances[_to] + _value > balances[_to]);
@@ -84,6 +85,7 @@ contract LikeCoin is ERC20 {
     }
 
     function burn(uint256 _value) {
+        require(supply >= _value);
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
         supply -= _value;
@@ -93,12 +95,11 @@ contract LikeCoin is ERC20 {
     function airdrop(address[] _addrs, uint256 _value) public {
         require(msg.sender == owner);
         require(_addrs.length > 0);
-        require(_value > 0);
-        require(_value <= airdropLimit);
+        require(0 < _value && _value <= airdropLimit);
         uint256 total = _addrs.length * _value;
         require(total / _addrs.length == _value);
         require(balances[this] >= total);
-        for (uint i = 0; i < _addrs.length; i++) {
+        for (uint i = 0; i < _addrs.length; ++i) {
             balances[_addrs[i]] += _value;
             Transfer(this, _addrs[i], _value);
         }
@@ -110,6 +111,7 @@ contract LikeCoin is ERC20 {
         require(crowdsaleAddr == 0x0);
         require(_crowdsaleAddr != 0x0);
         require(_privateFundUnlockTime > now);
+        require(supply + _value > supply);
         unlockTime = _privateFundUnlockTime;
         crowdsaleAddr = _crowdsaleAddr;
         supply += _value;
@@ -121,6 +123,7 @@ contract LikeCoin is ERC20 {
         require(msg.sender == owner);
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
+        require(supply + _value > supply);
         contributorPoolAddr = _contributorPoolAddr;
         supply += _value;
         balances[contributorPoolAddr] += _value;
@@ -140,6 +143,7 @@ contract LikeCoin is ERC20 {
     function mintForUserGrowthPool(uint256 _value) {
         require(isUserGrowthPool[msg.sender]);
         require(!userGrowthPoolMinted[msg.sender]);
+        require(supply + _value > supply);
         userGrowthPoolMinted[msg.sender] = true;
         supply += _value;
         balances[msg.sender] += _value;

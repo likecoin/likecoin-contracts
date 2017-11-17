@@ -1,6 +1,7 @@
 /* global Promise, web3 */
 
-const accounts = require("../accounts.json");
+const accounts = require("./accounts.json");
+const BigNumber = require("bignumber.js");
 
 async function assertSolidityThrow(f, message) {
     try {
@@ -17,14 +18,14 @@ function solidityEventPromise(eventSource, timeout=1000) {
     return new Promise((resolve, reject) => {
         let stopped = false;
         const filter = eventSource.watch((err, event) => {
+            if (!stopped) {
+                filter.stopWatching();
+                stopped = true;
+            }
             if (err) {
                 reject(err);
             } else {
                 resolve(event);
-            }
-            if (!stopped) {
-                filter.stopWatching();
-                stopped = true;
             }
         });
 
@@ -42,7 +43,7 @@ function solidityEventPromise(eventSource, timeout=1000) {
     });
 }
 
-async function jsonRpc(method, ...params) {
+function jsonRpc(method, ...params) {
     return new Promise((resolve, reject) => {
         return web3.currentProvider.sendAsync({
             jsonrpc: "2.0",
@@ -86,9 +87,16 @@ async function setBalance(addr, balance) {
     }
 }
 
+const decimalFactor = new BigNumber(10).pow(18);
+
+function coinsToCoinUnits(value) {
+    return decimalFactor.times(value);
+}
+
 module.exports = {
     assertSolidityThrow,
     solidityEventPromise,
     testrpcIncreaseTime,
-    setBalance
+    setBalance,
+    coinsToCoinUnits
 };

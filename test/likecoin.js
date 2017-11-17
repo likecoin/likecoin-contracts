@@ -5,14 +5,8 @@ const utils = require("./utils.js");
 const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 
-const decimalFactor = new BigNumber(10).pow(18);
-
-function coinsToCoinUnits(value) {
-    return decimalFactor.times(value);
-}
-
 contract("LikeCoin", (accounts) => {
-    const initialAmount = coinsToCoinUnits(10000);
+    const initialAmount = utils.coinsToCoinUnits(10000);
     const airdropLimit = initialAmount.div(10);
     let like;
 
@@ -20,9 +14,11 @@ contract("LikeCoin", (accounts) => {
         like = await LikeCoin.new(initialAmount, airdropLimit);
     });
 
-    it(`should set totalSupply correctly`, async () => {
-        const supply = await like.totalSupply();
-        assert(supply.eq(initialAmount), `total supply should be set to ${initialAmount} units of coins`);
+    it(`should deploy LikeCoin contract correctly`, async () => {
+        assert((await like.totalSupply()).eq(initialAmount), "Wrong initial supply");
+        assert((await like.balanceOf(like.address)).eq(initialAmount), "Wrong balance");
+        assert((await like.airdropLimit()).eq(airdropLimit), "Wrong airdropLimit");
+        assert.equal(await like.owner(), accounts[0], "Wrong owner");
     });
 
     it(`should airdrop coins into accounts`, async () => {
@@ -105,12 +101,11 @@ contract("LikeCoin", (accounts) => {
     });
 
     it("should forbid unapproved transferFrom", async () => {
-        const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1]));
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[2], accounts[0], allowanceOf1On0, {from: accounts[1]});
+            await like.transferFrom(accounts[2], accounts[0], 1, {from: accounts[1]});
         }, "transferFrom with invalid owner should be forbidden");
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0, {from: accounts[2]});
+            await like.transferFrom(accounts[0], accounts[2], 1, {from: accounts[2]});
         }, "transferFrom with invalid spender should be forbidden");
     });
 
@@ -141,7 +136,7 @@ contract("LikeCoin", (accounts) => {
     });
 
     it("should reset allowance correctly", async () => {
-        await like.approve(accounts[1], 1000, {from: accounts[2]});
+        await like.approve(accounts[1], 2000, {from: accounts[2]});
         await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
         await like.approve(accounts[1], 1, {from: accounts[2]});
         assert((await like.allowance(accounts[2], accounts[1])).eq(1), "Allowance is not correctly reset to 1 unit");
@@ -151,6 +146,10 @@ contract("LikeCoin", (accounts) => {
         await like.approve(accounts[1], 1000, {from: accounts[2]});
         assert((await like.allowance(accounts[2], accounts[1])).eq(1000), "Allowance is not correctly reset to 1000 units");
         await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
+    });
+
+    it("should maintain the total supply unchanged", async () => {
+        assert((await like.totalSupply()).eq(initialAmount), "Total supply should not have changed");
     });
 
     it("should burn correct amount of coins", async () => {
@@ -166,9 +165,10 @@ contract("LikeCoin", (accounts) => {
 
     it("should transfer and lock correctly", async () => {
         const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
-        await like.registerCrowdsales(accounts[0], 0, unlockTime);
+        await like.registerCrowdsales(0x1, 1, unlockTime);
         const balance0Before = await like.balanceOf(accounts[0]);
         const balance1 = await like.balanceOf(accounts[1]);
+        assert(!balance0Before.eq(0), "Banalce in accounts[0] is 0, please check test case");
         assert(!balance1.eq(0), "Banalce in accounts[1] is 0, please check test case");
         await like.transferAndLock(accounts[0], balance1, {from: accounts[1]});
         assert((await like.balanceOf(accounts[0])).eq(balance0Before.add(balance1)), "Wrong amount of coins in accounts[0] after transferAndLock");
@@ -179,8 +179,9 @@ contract("LikeCoin", (accounts) => {
         await like.transfer(accounts[1], balance0Before, {from: accounts[0]});
         await like.transfer(accounts[0], balance0Before, {from: accounts[1]});
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-        await utils.testrpcIncreaseTime(unlockTime + 10 - now);
+        await utils.testrpcIncreaseTime(unlockTime + 1 - now);
         await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
+        assert((await like.balanceOf(accounts[0])).eq(balance1.sub(1)), "Wrong balance after unlock");
         assert(!(await like.balanceOf(accounts[0])).eq(0), "accounts[0] has no balance left before transferAndLock, please check test case");
         await utils.assertSolidityThrow(async () => {
             await like.transferAndLock(accounts[1], 1, {from: accounts[0]});
@@ -189,7 +190,7 @@ contract("LikeCoin", (accounts) => {
 });
 
 contract("LikeCoinEvents", (accounts) => {
-    const initialAmount = coinsToCoinUnits(10000);
+    const initialAmount = utils.coinsToCoinUnits(10000);
     let like;
 
     before(async () => {
@@ -220,6 +221,14 @@ contract("LikeCoinEvents", (accounts) => {
         assert.equal(approvalEvent.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
         assert.equal(approvalEvent.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
         assert(approvalEvent.args._value.eq(allowance), "Approval event has wrong value on field '_value'");
+    });
+
+    it("should emit Transfer event after transferFrom", async () => {
+        await like.transferFrom(accounts[0], accounts[2], transferAmount, {from: accounts[1]});
+        const event = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[2], "Transfer event has wrong value on field '_to'");
+        assert(event.args._value.eq(transferAmount), "Transfer event has wrong value on field '_value'");
     });
 
     const burnAmount = 161;
@@ -265,8 +274,8 @@ contract("LikeCoinEvents", (accounts) => {
         assert(!balance.eq(0), "Banalce in accounts[0] is 0, please check test case");
         await like.transferAndLock(accounts[1], balance, {from: accounts[0]});
         const event = await utils.solidityEventPromise(like.TransferLocked());
-        assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-        assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
-        assert(event.args._value.eq(balance), "Transfer event has wrong value on field '_value'");
+        assert.equal(event.args._from, accounts[0], "TransferLocked event has wrong value on field '_from'");
+        assert.equal(event.args._to, accounts[1], "TransferLocked event has wrong value on field '_to'");
+        assert(event.args._value.eq(balance), "TransferLocked event has wrong value on field '_value'");
     });
 });
