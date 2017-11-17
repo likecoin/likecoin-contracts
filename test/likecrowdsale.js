@@ -2,15 +2,10 @@
 /* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
+const coinsToCoinUnits = utils.coinsToCoinUnits;
 const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 const LikeCrowdsale = artifacts.require("./LikeCrowdsale.sol");
-
-const decimalFactor = new BigNumber(10).pow(18);
-
-function coinsToCoinUnits(value) {
-    return decimalFactor.times(value);
-}
 
 const hardCap = coinsToCoinUnits(1000000000);
 const referrerBonusPercent = 5;
@@ -342,5 +337,33 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         assert.isBelow(now, end, "Blocktime is already after crowdsale end, please adjust test case");
         await crowdsale.finalize();
+    });
+});
+
+contract("LikeCoin Crowdsale Overflow", () => {
+    it("should forbid price and hardCap values which will overflow", async () => {
+        // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
+        // calling testrpcIncreaseTime
+        await utils.testrpcIncreaseTime(1);
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        const coinsPerEth = 2;
+        const hardCap = new BigNumber(2).pow(256).div(2);
+        const like = await LikeCoin.new(1, 0);
+        await utils.assertSolidityThrow(async () => {
+            await LikeCrowdsale.new(like.address, now + 100, now + 200, coinsPerEth, hardCap, referrerBonusPercent);
+        }, "Should forbid price and hardCap values which will overflow");
+    });
+
+    it("should forbid hardCap which will overflow", async () => {
+        // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
+        // calling testrpcIncreaseTime
+        await utils.testrpcIncreaseTime(1);
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        const hardCap = new BigNumber(2).pow(256).sub(1);
+        const like = await LikeCoin.new(1, 0);
+        const crowdsale = await LikeCrowdsale.new(like.address, now + 100, now + 200, 1, hardCap, referrerBonusPercent);
+        await utils.assertSolidityThrow(async () => {
+            await like.registerCrowdsales(crowdsale.address, hardCap, now + 300);
+        }, "Should forbid hardCap which will overflow");
     });
 });

@@ -3,14 +3,14 @@ pragma solidity ^0.4.18;
 import "./LikeCoin.sol";
 
 contract LikeCrowdsale {
-    address public owner;
-    LikeCoin public like;
-    uint public start;
-    uint public end;
-    uint256 public coinsPerEth;
-    uint256 public hardCap;
+    address public owner = 0x0;
+    LikeCoin public like = LikeCoin(0x0);
+    uint public start = 0;
+    uint public end = 0;
+    uint256 public coinsPerEth = 0;
+    uint256 public hardCap = 0;
     bool public privateFundFinalized = false;
-    uint8 public referrerBonusPercent;
+    uint256 public referrerBonusPercent = 0;
 
     mapping (address => bool) public kycDone;
     mapping (address => address) public referrer;
@@ -18,6 +18,10 @@ contract LikeCrowdsale {
     bool finalized = false;
 
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) {
+        require(_hardCap != 0);
+        require(_coinsPerEth != 0);
+        require((_coinsPerEth * _hardCap) / _hardCap == _coinsPerEth);
+        require(_referrerBonusPercent != 0);
         owner = msg.sender;
         like = LikeCoin(_likeAddr);
         start = _start;
@@ -60,11 +64,13 @@ contract LikeCrowdsale {
         require(like.balanceOf(this) > 0);
         require(msg.value > 0);
         require(kycDone[msg.sender]);
-        // TODO safe maths?
         uint256 coins = coinsPerEth * msg.value;
+        require(coins / msg.value == coinsPerEth);
         like.transfer(msg.sender, coins);
         if (referrer[msg.sender] != 0x0) {
-            like.transfer(referrer[msg.sender], coins * referrerBonusPercent / 100);
+            uint256 bonusEnlarged = coins * referrerBonusPercent;
+            require(bonusEnlarged / referrerBonusPercent == coins);
+            like.transfer(referrer[msg.sender], bonusEnlarged / 100);
         }
     }
 
