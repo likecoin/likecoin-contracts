@@ -7,11 +7,12 @@ async function assertSolidityThrow(f, message) {
     try {
         await f();
     } catch (e) {
-        if (/invalid opcode/.test(e.message)) {
+        if (/VM Exception while processing transaction/.test(e.message)) {
             return;
         }
+        throw new Error(`${message} (${e.message})`);
     }
-    throw new Error(message);
+    throw new Error(`${message} (returned successfully)`);
 }
 
 function solidityEventPromise(eventSource, timeout=1000) {
