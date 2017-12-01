@@ -7,6 +7,7 @@ const BigNumber = require("bignumber.js");
 const LikeCoin = artifacts.require("./LikeCoin.sol");
 const LikeCrowdsale = artifacts.require("./LikeCrowdsale.sol");
 
+const initialSupply = coinsToCoinUnits(10);
 const hardCap = coinsToCoinUnits(1000000000);
 const referrerBonusPercent = 5;
 const coinsPerEth = 25000;
@@ -26,10 +27,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     };
 
     const buyWeis = {
-        1: buyCoins[1].div(coinsPerEth),
-        2: buyCoins[2].div(coinsPerEth),
-        3: buyCoins[3].div(coinsPerEth),
-        4: buyCoins[4].div(coinsPerEth)
+        1: buyCoins[1].div(coinsPerEth), // 1 Ether
+        2: buyCoins[2].div(coinsPerEth), // 320 Ether
+        3: buyCoins[3].div(coinsPerEth), // 280 Ether
+        4: buyCoins[4].div(coinsPerEth) // 2,519 Ether
     };
 
     let unlockTime;
@@ -46,7 +47,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         start = now + 1000;
         end = start + crowdsaleLength;
         unlockTime = end + 10000;
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(initialSupply, 0);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
     });
 
@@ -57,7 +58,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         assert.equal((await crowdsale.coinsPerEth()).toNumber(), coinsPerEth, `LikeCrowdsale contract has wrong coinsPerEth`);
         assert((await crowdsale.hardCap()).eq(hardCap), `LikeCrowdsale contract has wrong hardCap`);
         assert((await crowdsale.referrerBonusPercent()).eq(referrerBonusPercent), `LikeCrowdsale contract has wrong referrerBonusPercent`);
-        assert.equal(await crowdsale.privateFundFinalized(), false, `LikeCrowdsale contract has wrong privateFundFinalized`);
+        assert.equal(await crowdsale.isPrivateFundFinalized(), false, `LikeCrowdsale contract has wrong privateFundFinalized`);
     });
 
     it("should forbid non-owner to register crowdsale contract", async () => {
@@ -69,7 +70,8 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     it(`should mint ${hardCap.toFixed()} units of coins`, async () => {
         await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
         const supply = await like.totalSupply();
-        assert(supply.eq(hardCap), `${hardCap.toFixed()} units of coins should be minted`);
+        const expected = initialSupply.add(hardCap);
+        assert(supply.eq(expected), `${expected.toFixed()} units of coins should be minted`);
     });
 
     it(`should give the crowdsale contract ${hardCap.toFixed()} units of coins`, async () => {
@@ -109,8 +111,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     });
 
     it("should forbid non-owner to add private fund", async () => {
+        const remaining = await like.balanceOf(crowdsale.address);
+        assert(!remaining.eq(0), "Remaining coins is 0, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await crowdsale.addPrivateFund(accounts[7], 100000, {from: accounts[1]});
+            await crowdsale.addPrivateFund(accounts[7], remaining, {from: accounts[1]});
         }, "should forbid adding private fund from accounts[1]");
     });
 
@@ -121,21 +125,25 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     });
 
     it("should forbid adding private fund after finalizing private fund", async () => {
-        const finalizeFlag1 = await crowdsale.privateFundFinalized();
+        const finalizeFlag1 = await crowdsale.isPrivateFundFinalized();
         assert.equal(finalizeFlag1, false, "Finalize flag is already set before finalizing private fund, please adjust test case");
         await crowdsale.finalizePrivateFund();
-        const finalizeFlag2 = await crowdsale.privateFundFinalized();
+        const finalizeFlag2 = await crowdsale.isPrivateFundFinalized();
         assert.equal(finalizeFlag2, true, "Finalize flag should be not set");
+        const remaining = await like.balanceOf(crowdsale.address);
+        assert(!remaining.eq(0), "Remaining coins is 0, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await crowdsale.addPrivateFund(accounts[7], 100000);
+            await crowdsale.addPrivateFund(accounts[7], remaining);
         }, "should forbid adding private fund after finalizing private fund");
     });
 
     it("should lock private fund until unlock time", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         assert.isBelow(now, unlockTime, "Blocktime is already after unlock time, please adjust test case");
+        const balance = await like.balanceOf(accounts[5]);
+        assert(!balance.eq(0), "Remaining coins is 0, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[7], 100, {from: accounts[5]});
+            await like.transfer(accounts[7], 1, {from: accounts[5]});
         }, "should lock private fund until unlock time");
     });
 
@@ -150,7 +158,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
 
     it("should forbid buying coins before KYC", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-        await utils.testrpcIncreaseTime(start + 10 - now);
+        await utils.testrpcIncreaseTime(start + 1 - now);
         await utils.assertSolidityThrow(async() => {
             await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2] });
         }, "Buying coins before KYC should be forbidden");
@@ -190,8 +198,9 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const account4Coins = await like.balanceOf(accounts[4]);
         assert(account4Coins.eq(buyCoins[4]), "Wrong amount of coins given after accounts[4] buying coins");
         const account1CoinsAfter = await like.balanceOf(accounts[1]);
-        assert(account1CoinsAfter.sub(account1CoinsBefore).eq(buyCoins[4].mul(referrerBonusPercent).div(100)), "Wrong amount of bonus coins given to accounts[1] after accounts[4] buying coins");
-        assert(remaining3.eq(remaining2.sub(account4Coins).sub(account1CoinsAfter.sub(account1CoinsBefore))),  "Wrong remaining coins after accounts[4] buying coins");
+        const account1ReferrerBonus = account1CoinsAfter.sub(account1CoinsBefore);
+        assert(account1ReferrerBonus.eq(buyCoins[4].mul(referrerBonusPercent).div(100)), "Wrong amount of bonus coins given to accounts[1] after accounts[4] buying coins");
+        assert(remaining3.eq(remaining2.sub(account4Coins).sub(account1ReferrerBonus)),  "Wrong remaining coins after accounts[4] buying coins");
     });
 
     it("should forbid setting another referrer", async () => {
@@ -222,10 +231,12 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     it("should forbid buying coins after crowdsale ends", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         if (now < end) {
-            await utils.testrpcIncreaseTime(end + 10 - now);
+            await utils.testrpcIncreaseTime(end + 1 - now);
         }
         await utils.assertSolidityThrow(async() => {
-            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: buyWeis[3] });
+            const remaining = await like.balanceOf(crowdsale.address);
+            assert(!remaining.lt(coinsPerEth), "Remaining coins is less than the value of 1 wei, please check test case");
+            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: 1 });
         }, "Buying coins after crowdsale ends should be forbidden");
     });
 
@@ -236,6 +247,8 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     });
 
     it("should send ether to owner after finalization", async () => {
+        const remaining = await like.balanceOf(crowdsale.address);
+        assert(!remaining.eq(0), "Remaining coins is 0, please check test case");
         const ownerBalance1 = web3.eth.getBalance(accounts[0]);
         const contractBalance1 = web3.eth.getBalance(crowdsale.address);
         await crowdsale.finalize({gasPrice: 0});
@@ -265,20 +278,24 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.transfer(accounts[7], 100, {from: accounts[5]});
         }, "should lock private fund until unlock time");
-        await utils.testrpcIncreaseTime(unlockTime + 10 - now);
+        await utils.testrpcIncreaseTime(unlockTime + 1 - now);
         await like.transfer(accounts[7], 100, {from: accounts[5]});
     });
 });
 
 contract("LikeCoin Crowdsale 2", (accounts) => {
+    const privateFunds = {
+        1: coinsToCoinUnits(100000000),
+    };
+
     const buyCoins = {
-        1: coinsToCoinUnits(800000000),
-        2: coinsToCoinUnits(200000000),
+        1: coinsToCoinUnits(795000000),
+        2: coinsToCoinUnits(105000000),
     };
 
     const buyWeis = {
-        1: buyCoins[1].div(coinsPerEth),
-        2: buyCoins[2].div(coinsPerEth),
+        1: buyCoins[1].div(coinsPerEth), // 31,800 Ether
+        2: buyCoins[2].div(coinsPerEth), // 4,200 Ether
     };
 
     const unlockTime = 0x7FFFFFFF;
@@ -297,13 +314,15 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         like = await LikeCoin.new(0, 0);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
         await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
+        await crowdsale.addPrivateFund(accounts[1], privateFunds[1]);
         now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-        await utils.testrpcIncreaseTime(start + 10 - now);
+        await utils.testrpcIncreaseTime(start + 1 - now);
         await crowdsale.registerKYC([accounts[1], accounts[2]]);
         await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1] });
     });
 
     it("should forbid adding private fund after crowdsale started", async () => {
+        assert.equal(await crowdsale.isPrivateFundFinalized(), true, "isPrivateFundFinalized should be set to true");
         await utils.assertSolidityThrow(async () => {
             await crowdsale.addPrivateFund(accounts[3], 10000000);
         }, "crowdsale has already started, adding private fund should be forbidden");
@@ -316,9 +335,10 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         }, "Buying more coins than remaining should be forbidden");
 
         await crowdsale.registerReferrer(accounts[3], accounts[1]);
-        const toBuy = remaining.mul(100).div(100 + referrerBonusPercent);
+        const toBuyWeis = remaining.mul(100).div(100 + referrerBonusPercent).div(coinsPerEth);
+        assert(toBuyWeis.floor().eq(toBuyWeis), "Number of coins to buy is not an integer, check test case");
         await utils.assertSolidityThrow(async () => {
-            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: toBuy.div(coinsPerEth).add(1).floor() });
+            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: toBuyWeis.add(1) });
         }, "Buying more coins (bonus included) than remaining should be forbidden");
     });
 
@@ -336,24 +356,18 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
     it("should allow crowdsale to end early when meeting hardCap", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         assert.isBelow(now, end, "Blocktime is already after crowdsale end, please adjust test case");
-        await crowdsale.finalize();
+
+        const ownerBalance1 = web3.eth.getBalance(accounts[0]);
+        const contractBalance1 = web3.eth.getBalance(crowdsale.address);
+        await crowdsale.finalize({gasPrice: 0});
+        const ownerBalance2 = web3.eth.getBalance(accounts[0]);
+        const contractBalance2 = web3.eth.getBalance(crowdsale.address);
+        assert(ownerBalance2.eq(ownerBalance1.add(contractBalance1)), "Wrong owner balance after finalization");
+        assert.equal(contractBalance2.toNumber(), 0, "Wrong contract balance after finalization");
     });
 });
 
 contract("LikeCoin Crowdsale Overflow", () => {
-    it("should forbid price and hardCap values which will overflow", async () => {
-        // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
-        // calling testrpcIncreaseTime
-        await utils.testrpcIncreaseTime(1);
-        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-        const coinsPerEth = 2;
-        const hardCap = new BigNumber(2).pow(256).div(2);
-        const like = await LikeCoin.new(1, 0);
-        await utils.assertSolidityThrow(async () => {
-            await LikeCrowdsale.new(like.address, now + 100, now + 200, coinsPerEth, hardCap, referrerBonusPercent);
-        }, "Should forbid price and hardCap values which will overflow");
-    });
-
     it("should forbid hardCap which will overflow", async () => {
         // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
         // calling testrpcIncreaseTime

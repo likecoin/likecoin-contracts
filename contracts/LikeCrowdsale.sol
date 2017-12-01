@@ -9,18 +9,17 @@ contract LikeCrowdsale {
     uint public end = 0;
     uint256 public coinsPerEth = 0;
     uint256 public hardCap = 0;
-    bool public privateFundFinalized = false;
     uint256 public referrerBonusPercent = 0;
 
     mapping (address => bool) public kycDone;
     mapping (address => address) public referrer;
 
+    bool privateFundFinalized = false;
     bool finalized = false;
 
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) {
         require(_hardCap != 0);
         require(_coinsPerEth != 0);
-        require((_coinsPerEth * _hardCap) / _hardCap == _coinsPerEth);
         require(_referrerBonusPercent != 0);
         owner = msg.sender;
         like = LikeCoin(_likeAddr);
@@ -31,10 +30,13 @@ contract LikeCrowdsale {
         referrerBonusPercent = _referrerBonusPercent;
     }
 
+    function isPrivateFundFinalized() public constant returns (bool) {
+        return privateFundFinalized || now >= start;
+    }
+
     function addPrivateFund(address _addr, uint256 _value) {
         require(msg.sender == owner);
-        require(now < start);
-        require(!privateFundFinalized);
+        require(!isPrivateFundFinalized());
         require(_value > 0);
         require(like.balanceOf(this) >= _value);
         like.transferAndLock(_addr, _value);
@@ -47,7 +49,7 @@ contract LikeCrowdsale {
 
     function registerKYC(address[] _customerAddrs) {
         require(msg.sender == owner);
-        for (uint32 i = 0; i < _customerAddrs.length; i++) {
+        for (uint32 i = 0; i < _customerAddrs.length; ++i) {
             kycDone[_customerAddrs[i]] = true;
         }
     }
