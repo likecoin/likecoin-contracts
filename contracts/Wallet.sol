@@ -1,4 +1,4 @@
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.18;
 
 // Wallet is a contract representing an account.
 // With the Wallet contract, user can delegate transactions and the corresponding transaction fee to others.
