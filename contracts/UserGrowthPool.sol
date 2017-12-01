@@ -13,7 +13,7 @@ contract UserGrowthPool {
     mapping (address => uint256) ownerIndex;
 
     // avoid using 0 as fields in proposals are by default initialized to 0
-    uint64 minApprovedId = 1;
+    uint64 minUsableId = 1;
     uint64 nextId = 1;
 
     struct Proposal {
@@ -51,6 +51,7 @@ contract UserGrowthPool {
         like = LikeCoin(_likeAddr);
         for (uint8 i = 0; i < _owners.length; i++) {
             owners.push(_owners[i]);
+            require(ownerIndex[_owners[i]] == 0);
             ownerIndex[_owners[i]] = 1 << i;
         }
         threshold = _threshold;
@@ -81,12 +82,21 @@ contract UserGrowthPool {
         TransferProposal(id, msg.sender, _to, _value);
     }
 
+    mapping (address => bool) ownerDuplicationCheck;
+
     function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) {
         require(ownerIndex[msg.sender] != 0);
         require(_newOwners.length < 256);
         require(_newOwners.length > 0);
         require(_newThreshold > 0);
         require(_newOwners.length >= _newThreshold);
+        for (uint8 i = 0; i < _newOwners.length; ++i) {
+            delete ownerDuplicationCheck[_newOwners[i]];
+        }
+        for (i = 0; i < _newOwners.length; ++i) {
+            require(ownerDuplicationCheck[_newOwners[i]] == false);
+            ownerDuplicationCheck[_newOwners[i]] = true;
+        }
         uint64 id = _nextId();
         proposals[id] = Proposal(id, msg.sender, threshold, 0);
         setOwnersInfo[id] = SetOwnersInfo(id, _newOwners, _newThreshold);
@@ -94,21 +104,19 @@ contract UserGrowthPool {
     }
 
     function confirmProposal(uint64 id) {
-        require(id >= minApprovedId);
+        require(id >= minUsableId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded > 0);
         uint256 index = ownerIndex[msg.sender];
         require(index != 0);
         require((proposals[id].confirmedTable & index) == 0);
         proposals[id].confirmedTable |= index;
-        if (proposals[id].confirmNeeded > 0) {
-            proposals[id].confirmNeeded -= 1;
-        }
+        proposals[id].confirmNeeded -= 1;
         ProposalConfirmation(id, msg.sender);
     }
 
     function executeProposal(uint64 id) {
-        require(id >= minApprovedId);
+        require(id >= minUsableId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded == 0);
         uint256 index = ownerIndex[msg.sender];
@@ -117,16 +125,16 @@ contract UserGrowthPool {
             like.transfer(transferInfo[id].to, transferInfo[id].value);
             delete transferInfo[id];
         } else if (setOwnersInfo[id].id == id) {
-            for (uint8 i = 0; i < owners.length; i++) {
-                ownerIndex[owners[i]] = 0;
+            for (uint8 i = 0; i < owners.length; ++i) {
+                delete ownerIndex[owners[i]];
             }
             owners.length = 0;
-            for (i = 0; i < setOwnersInfo[id].newOwners.length; i++) {
+            for (i = 0; i < setOwnersInfo[id].newOwners.length; ++i) {
                 owners.push(setOwnersInfo[id].newOwners[i]);
                 ownerIndex[setOwnersInfo[id].newOwners[i]] = 1 << i;
             }
             threshold = setOwnersInfo[id].newThreshold;
-            minApprovedId = nextId;
+            minUsableId = nextId;
             delete setOwnersInfo[id];
         } else {
             revert();
