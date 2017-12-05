@@ -15,7 +15,7 @@ async function assertSolidityThrow(f, message) {
     throw new Error(`${message} (returned successfully)`);
 }
 
-function solidityEventPromise(eventSource, timeout=1000) {
+function solidityEventPromise(eventSource, timeout=10000) {
     return new Promise((resolve, reject) => {
         let stopped = false;
         const filter = eventSource.watch((err, event) => {
