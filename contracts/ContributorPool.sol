@@ -3,16 +3,16 @@ pragma solidity ^0.4.18;
 import "./LikeCoin.sol";
 
 contract ContributorPool {
-    LikeCoin public like;
+    LikeCoin public like = LikeCoin(0x0);
     // avoid using 0 as fields in proposals are by default initialized to 0
     uint64 minUsableId = 1;
     uint64 nextId = 1;
 
-    uint8 public threshold;
-    uint256 public lockDuration;
+    uint8 public threshold = 0;
+    uint256 public lockDuration = 0;
 
-    uint256 lockedCoin;
-    mapping (uint64 => uint256) giveUnlockTime;
+    uint256 lockedCoin = 0;
+    // mapping (uint64 => uint256) giveUnlockTime; // TODO move to give info
     address[] public owners;
     mapping (address => uint256) ownerIndex;
 
@@ -30,6 +30,7 @@ contract ContributorPool {
         uint64 id;
         address to;
         uint256 value;
+        uint256 unlockTime;
     }
     mapping (uint64 => GiveInfo) giveInfo;
     event GiveProposal(uint64 indexed _id, address _proposer, address _to, uint256 _value);
@@ -69,7 +70,7 @@ contract ContributorPool {
     }
 
     function getUnlockTime(uint64 id) public constant returns (uint256) {
-        return giveUnlockTime[id];
+        return giveInfo[id].unlockTime;
     }
 
     function _nextId() internal returns (uint64 id) {
@@ -83,7 +84,7 @@ contract ContributorPool {
         require(_value > 0);
         uint64 id = _nextId();
         proposals[id] = Proposal(id, msg.sender, threshold, 0);
-        giveInfo[id] = GiveInfo(id, _to, _value);
+        giveInfo[id] = GiveInfo(id, _to, _value, 0);
         GiveProposal(id, msg.sender, _to, _value);
     }
 
@@ -129,10 +130,10 @@ contract ContributorPool {
         if (giveInfo[id].id == id) {
             require(getRemainingLikeCoins() >= giveInfo[id].value);
             lockedCoin += giveInfo[id].value;
-            giveUnlockTime[id] = now + lockDuration;
+            giveInfo[id].unlockTime = now + lockDuration;
         } else if (setOwnersInfo[id].id == id) {
             for (uint8 i = 0; i < owners.length; ++i) {
-                ownerIndex[owners[i]] = 0;
+                delete ownerIndex[owners[i]];
             }
             owners.length = 0;
             for (i = 0; i < setOwnersInfo[id].newOwners.length; ++i) {
@@ -153,12 +154,12 @@ contract ContributorPool {
         require(proposals[id].id == id);
         address claimer = msg.sender;
         require(giveInfo[id].to == claimer);
-        require(giveUnlockTime[id] > 0);
-        require(giveUnlockTime[id] < now);
+        require(giveInfo[id].unlockTime > 0);
+        require(giveInfo[id].unlockTime < now);
+        require(lockedCoin > likeCoin);
         uint256 likeCoin = giveInfo[id].value;
         delete proposals[id];
         delete giveInfo[id];
-        delete giveUnlockTime[id];
         like.transfer(claimer, likeCoin);
         lockedCoin -= likeCoin;
         Claimed(id);
