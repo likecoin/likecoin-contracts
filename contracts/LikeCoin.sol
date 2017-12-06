@@ -31,7 +31,7 @@ contract LikeCoin is ERC20 {
         airdropLimit = _airdropLimit;
     }
 
-    function totalSupply() constant returns (uint256) {
+    function totalSupply() public constant returns (uint256) {
         return supply;
     }
 
@@ -52,7 +52,7 @@ contract LikeCoin is ERC20 {
         return true;
     }
 
-    function transfer(address _to, uint256 _value) returns (bool success) {
+    function transfer(address _to, uint256 _value) public returns (bool success) {
         return _transfer(msg.sender, _to, _value);
     }
 
@@ -74,17 +74,17 @@ contract LikeCoin is ERC20 {
         return true;
     }
 
-    function approve(address _spender, uint256 _value) returns (bool success) {
+    function approve(address _spender, uint256 _value) public returns (bool success) {
         allowed[msg.sender][_spender] = _value;
         Approval(msg.sender, _spender, _value);
         return true;
     }
 
-    function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
+    function allowance(address _owner, address _spender) public constant returns (uint256 remaining) {
         return allowed[_owner][_spender];
     }
 
-    function burn(uint256 _value) {
+    function burn(uint256 _value) public {
         require(supply >= _value);
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
@@ -119,7 +119,7 @@ contract LikeCoin is ERC20 {
         Transfer(0x0, crowdsaleAddr, _value);
     }
 
-    function registerContributorPool(address _contributorPoolAddr, uint256 _value) {
+    function registerContributorPool(address _contributorPoolAddr, uint256 _value) public {
         require(msg.sender == owner);
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
@@ -130,17 +130,17 @@ contract LikeCoin is ERC20 {
         Transfer(0x0, contributorPoolAddr, _value);
     }
 
-    function registerUserGrowthPools(address[] _poolAddrs) {
+    function registerUserGrowthPools(address[] _poolAddrs) public {
         require(msg.sender == owner);
         require(userGrowthPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
-        for (uint i = 0; i < _poolAddrs.length; i++) {
+        for (uint i = 0; i < _poolAddrs.length; ++i) {
             userGrowthPoolAddrs.push(_poolAddrs[i]);
             isUserGrowthPool[_poolAddrs[i]] = true;
         }
     }
 
-    function mintForUserGrowthPool(uint256 _value) {
+    function mintForUserGrowthPool(uint256 _value) public {
         require(isUserGrowthPool[msg.sender]);
         require(!userGrowthPoolMinted[msg.sender]);
         require(supply + _value > supply);

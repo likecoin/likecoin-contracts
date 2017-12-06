@@ -17,7 +17,7 @@ contract LikeCrowdsale {
     bool privateFundFinalized = false;
     bool finalized = false;
 
-    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) {
+    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) public {
         require(_hardCap != 0);
         require(_coinsPerEth != 0);
         require(_referrerBonusPercent != 0);
@@ -34,7 +34,7 @@ contract LikeCrowdsale {
         return privateFundFinalized || now >= start;
     }
 
-    function addPrivateFund(address _addr, uint256 _value) {
+    function addPrivateFund(address _addr, uint256 _value) public {
         require(msg.sender == owner);
         require(!isPrivateFundFinalized());
         require(_value > 0);
@@ -42,25 +42,25 @@ contract LikeCrowdsale {
         like.transferAndLock(_addr, _value);
     }
 
-    function finalizePrivateFund() {
+    function finalizePrivateFund() public {
         require(msg.sender == owner);
         privateFundFinalized = true;
     }
 
-    function registerKYC(address[] _customerAddrs) {
+    function registerKYC(address[] _customerAddrs) public {
         require(msg.sender == owner);
         for (uint32 i = 0; i < _customerAddrs.length; ++i) {
             kycDone[_customerAddrs[i]] = true;
         }
     }
 
-    function registerReferrer(address _addr, address _referrer) {
+    function registerReferrer(address _addr, address _referrer) public {
         require(msg.sender == owner);
         require(referrer[_addr] == 0x0);
         referrer[_addr] = _referrer;
     }
 
-    function () payable {
+    function () public payable {
         require(now >= start);
         require(now < end);
         require(like.balanceOf(this) > 0);
@@ -76,7 +76,7 @@ contract LikeCrowdsale {
         }
     }
 
-    function finalize() {
+    function finalize() public {
         require(!finalized);
         require(msg.sender == owner);
         require(now >= start);

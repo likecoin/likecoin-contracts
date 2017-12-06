@@ -342,8 +342,6 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should allow set owners with confirmations", async () => {
-        await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
-        const transferProposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
         await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[1]});
         const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
         const proposalId = setOwnersProposal.args._id;
@@ -351,6 +349,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         const _newOwners = setOwnersProposal.args._newOwners;
         assert.deepEqual(_newOwners, newOwners, "Wrong newOwners in SetOwnersProposal event");
         assert.equal(setOwnersProposal.args._newThreshold.toNumber(), newThreshold, "Wrong newThreshold in SetOwnersProposal event");
+        await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
+        const transferProposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[1]});
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await pools[0].confirmProposal(proposalId, {from: accounts[3]});
@@ -481,5 +481,76 @@ contract("LikeCoin User Growth Pools Overflow", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await pool1.mint();
         }, "should forbid minting with values overflowing the total supply");
+    });
+});
+
+contract("LikeCoin User Growth Pools Invalid IDs", (accounts) => {
+    it("should forbid confirming or executing invalid proposal IDs", async () => {
+        // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
+        // calling testrpcIncreaseTime
+        await utils.testrpcIncreaseTime(1);
+        const like = await LikeCoin.new(0, 0);
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        const mintTime = now + 1000;
+        const pool = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValues[0]);
+        await like.registerUserGrowthPools([pool.address]);
+        await utils.testrpcIncreaseTime(mintTime + 1 - now);
+        await pool.mint();
+        const upperBound = new BigNumber(2).pow(64);
+        for (let i = 0; i < 10; i++) {
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(i, {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${i}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.executeProposal(i, {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${i}`);
+
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(upperBound.sub(i + 1), {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${upperBound.sub(i + 1).toFixed()}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(upperBound.sub(i + 1), {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${upperBound.sub(i + 1).toFixed()}`);
+
+            // 2^64 ~= 1.8e19, so 20 decimal places contains enough entropy for random number in [0, 2^64)
+            const randId = BigNumber.random(20).mul(upperBound).floor();
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(randId, {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${randId.toFixed()}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.executeProposal(randId, {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${randId.toFixed()}`);
+        }
+        // repeat after setOwners
+        await pool.proposeSetOwners([accounts[0]], 1, {from: accounts[0]});
+        const setOwnersProposal = await utils.solidityEventPromise(pool.SetOwnersProposal());
+        const proposalId = setOwnersProposal.args._id;
+        await pool.confirmProposal(proposalId, {from: accounts[0]});
+        await pool.executeProposal(proposalId, {from: accounts[0]});
+
+        for (let i = 0; i < 10; i++) {
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(i, {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${i}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.executeProposal(i, {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${i}`);
+
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(upperBound.sub(i + 1), {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${upperBound.sub(i + 1).toFixed()}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(upperBound.sub(i + 1), {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${upperBound.sub(i + 1).toFixed()}`);
+
+            // 2^64 ~= 1.8e19, so 20 decimal places contains enough entropy for random number in [0, 2^64)
+            const randId = BigNumber.random(20).mul(upperBound).floor();
+            await utils.assertSolidityThrow(async () => {
+                await pool.confirmProposal(randId, {from: accounts[0]});
+            }, `should forbid confirming invalid proposal with ID ${randId.toFixed()}`);
+            await utils.assertSolidityThrow(async () => {
+                await pool.executeProposal(randId, {from: accounts[0]});
+            }, `should forbid executing invalid proposal with ID ${randId.toFixed()}`);
+        }
     });
 });
