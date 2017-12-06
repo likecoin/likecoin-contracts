@@ -53,9 +53,9 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
 
     it("should deploy the crowdsale contract correctly", async () => {
         assert.equal(await crowdsale.owner(), accounts[0], `LikeCrowdsale contract has wrong owner`);
-        assert.equal(await crowdsale.start(), start, `LikeCrowdsale contract has wrong start`);
-        assert.equal(await crowdsale.end(), end, `LikeCrowdsale contract has wrong end`);
-        assert.equal((await crowdsale.coinsPerEth()).toNumber(), coinsPerEth, `LikeCrowdsale contract has wrong coinsPerEth`);
+        assert((await crowdsale.start()).eq(start), `LikeCrowdsale contract has wrong start`);
+        assert((await crowdsale.end()).eq(end), `LikeCrowdsale contract has wrong end`);
+        assert((await crowdsale.coinsPerEth()).eq(coinsPerEth), `LikeCrowdsale contract has wrong coinsPerEth`);
         assert((await crowdsale.hardCap()).eq(hardCap), `LikeCrowdsale contract has wrong hardCap`);
         assert((await crowdsale.referrerBonusPercent()).eq(referrerBonusPercent), `LikeCrowdsale contract has wrong referrerBonusPercent`);
         assert.equal(await crowdsale.isPrivateFundFinalized(), false, `LikeCrowdsale contract has wrong privateFundFinalized`);
@@ -87,17 +87,29 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
 
     it("should add private fund correctly", async () => {
         const remaining1 = await like.balanceOf(crowdsale.address);
+
         await crowdsale.addPrivateFund(accounts[5], privateFunds[5].sub(100));
+        const privateFundEvent1 = await utils.solidityEventPromise(crowdsale.AddPrivateFund());
+        assert.equal(privateFundEvent1.args._addr, accounts[5], "AddPrivateFund event has wrong value on field '_addr'");
+        assert(privateFundEvent1.args._value.eq(privateFunds[5].sub(100)), "AddPrivateFund event has wrong value on field '_value'");
         const remaining2 = await like.balanceOf(crowdsale.address);
         const account5Coins = await like.balanceOf(accounts[5]);
         assert(remaining2.eq(remaining1.sub(privateFunds[5].sub(100))), "Wrong remaining coins after adding private fund");
         assert(account5Coins.eq(privateFunds[5].sub(100)), "Wrong amount of coins on accounts[5] after adding private fund (1st time)");
+
         await crowdsale.addPrivateFund(accounts[6], privateFunds[6]);
+        const privateFundEvent2 = await utils.solidityEventPromise(crowdsale.AddPrivateFund());
+        assert.equal(privateFundEvent2.args._addr, accounts[6], "AddPrivateFund event has wrong value on field '_addr'");
+        assert(privateFundEvent2.args._value.eq(privateFunds[6]), "AddPrivateFund event has wrong value on field '_value'");
         const remaining3 = await like.balanceOf(crowdsale.address);
         const account6Coins = await like.balanceOf(accounts[6]);
         assert(remaining3.eq(remaining2.sub(privateFunds[6])), "Wrong remaining coins after adding private fund");
         assert(account6Coins.eq(privateFunds[6]), "Wrong amount of coins on accounts[6] after adding private fund");
+
         await crowdsale.addPrivateFund(accounts[5], 100);
+        const privateFundEvent3 = await utils.solidityEventPromise(crowdsale.AddPrivateFund());
+        assert.equal(privateFundEvent3.args._addr, accounts[5], "AddPrivateFund event has wrong value on field '_addr'");
+        assert(privateFundEvent3.args._value.eq(100), "AddPrivateFund event has wrong value on field '_value'");
         const remaining4 = await like.balanceOf(crowdsale.address);
         assert(remaining4.eq(remaining3.sub(100)), "Wrong remaining coins after adding private fund");
         assert((await like.balanceOf(accounts[5])).eq(privateFunds[5]), "Wrong amount of coins on accounts[5] after adding private fund (2nd time)");
@@ -128,6 +140,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const finalizeFlag1 = await crowdsale.isPrivateFundFinalized();
         assert.equal(finalizeFlag1, false, "Finalize flag is already set before finalizing private fund, please adjust test case");
         await crowdsale.finalizePrivateFund();
+        await utils.solidityEventPromise(crowdsale.FinalizePrivateFund());
         const finalizeFlag2 = await crowdsale.isPrivateFundFinalized();
         assert.equal(finalizeFlag2, true, "Finalize flag should be not set");
         const remaining = await like.balanceOf(crowdsale.address);
@@ -149,10 +162,12 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
 
     it("should forbid buying coins before crowdsale starts", async () => {
         await crowdsale.registerKYC([accounts[1]]);
+        const event = await utils.solidityEventPromise(crowdsale.RegisterKYC());
+        assert.equal(event.args._addr, accounts[1], "RegisterKYC event has wrong value on field '_addr'");
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         assert.isBelow(now, start, "Blocktime is already after crowdsale start, please adjust test case");
         await utils.assertSolidityThrow(async() => {
-            await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1] });
+            await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1], gas: "200000" });
         }, "Buying coins before crowdsale starts should be forbidden");
     });
 
@@ -160,19 +175,33 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(start + 1 - now);
         await utils.assertSolidityThrow(async() => {
-            await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2] });
+            await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000" });
         }, "Buying coins before KYC should be forbidden");
     });
 
     it("should allow buying coins after KYC", async () => {
         const remaining1 = await like.balanceOf(crowdsale.address);
-        await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1] });
+        await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1], gas: "200000" });
+        const purchaseEvent1 = await utils.solidityEventPromise(crowdsale.Purchase());
+        assert.equal(purchaseEvent1.args._addr, accounts[1], "Purchase event has wrong value on field '_addr'");
+        assert(purchaseEvent1.args._ethers.eq(buyWeis[1]), "Purchase event has wrong value on field '_ethers'");
+        assert(purchaseEvent1.args._coins.eq(buyCoins[1]), "Purchase event has wrong value on field '_coins'");
         const remaining2 = await like.balanceOf(crowdsale.address);
         assert(remaining1.sub(buyCoins[1]).eq(remaining2), "Wrong remaining coins after accounts[1] buying coins");
         const account1Coins = await like.balanceOf(accounts[1]);
         assert(account1Coins.eq(buyCoins[1]), "Wrong amount of coins given after accounts[1] buying coins");
-        await crowdsale.registerKYC([accounts[2]]);
-        await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2] });
+        const registerKYCEvents = (await crowdsale.registerKYC([accounts[2], accounts[3], accounts[4]])).logs;
+        const registerExpectedCount = {[accounts[2]]: 1, [accounts[3]]: 1, [accounts[4]]: 1};
+        registerKYCEvents.forEach((event) => {
+            const addr = event.args._addr;
+            assert(registerExpectedCount[addr], "Wrong RegisterKYC events");
+            registerExpectedCount[addr] -= 1;
+        });
+        await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000" });
+        const purchaseEvent2 = await utils.solidityEventPromise(crowdsale.Purchase());
+        assert.equal(purchaseEvent2.args._addr, accounts[2], "Purchase event has wrong value on field '_addr'");
+        assert(purchaseEvent2.args._ethers.eq(buyWeis[2]), "Purchase event has wrong value on field '_ethers'");
+        assert(purchaseEvent2.args._coins.eq(buyCoins[2]), "Purchase event has wrong value on field '_coins'");
         const remaining3 = await like.balanceOf(crowdsale.address);
         assert(remaining2.sub(buyCoins[2]).eq(remaining3), "Wrong remaining coins after accounts[2] buying coins");
         const account2Coins = await like.balanceOf(accounts[2]);
@@ -180,26 +209,55 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     });
 
     it("should calculate bonus correctly", async () => {
-        await crowdsale.registerKYC([accounts[3], accounts[4]]);
-        const remaining1 = await like.balanceOf(crowdsale.address);
         await crowdsale.registerReferrer(accounts[3], accounts[7]);
-        await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: buyWeis[3] });
+        const registerReferrerEvent1 = await utils.solidityEventPromise(crowdsale.RegisterReferrer());
+        assert.equal(registerReferrerEvent1.args._addr, accounts[3], "registerReferrer event has wrong value on field '_addr'");
+        assert.equal(registerReferrerEvent1.args._referrer, accounts[7], "registerReferrer event has wrong value on field '_referrer'");
+
+        const remaining1 = await like.balanceOf(crowdsale.address);
+        await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: buyWeis[3], gas: "200000" });
+        const purchaseEvent1 = await utils.solidityEventPromise(crowdsale.Purchase());
+        assert.equal(purchaseEvent1.args._addr, accounts[3], "Purchase event has wrong value on field '_addr'");
+        assert(purchaseEvent1.args._ethers.eq(buyWeis[3]), "Purchase event has wrong value on field '_ethers'");
+        assert(purchaseEvent1.args._coins.eq(buyCoins[3]), "Purchase event has wrong value on field '_coins'");
+
+        const bonus1 = buyCoins[3].mul(referrerBonusPercent).div(100);
+        const referrerBonusEvent1 = await utils.solidityEventPromise(crowdsale.ReferrerBonus());
+        assert.equal(referrerBonusEvent1.args._referrer, accounts[7], "Purchase event has wrong value on field '_referrer'");
+        assert.equal(referrerBonusEvent1.args._buyer, accounts[3], "Purchase event has wrong value on field '_buyer'");
+        assert(referrerBonusEvent1.args._bonus.eq(bonus1), "Purchase event has wrong value on field '_bonus'");
+
         const remaining2 = await like.balanceOf(crowdsale.address);
         const account3Coins = await like.balanceOf(accounts[3]);
         assert(account3Coins.eq(buyCoins[3]), "Wrong amount of coins given after accounts[3] buying coins");
         const account7Coins = await like.balanceOf(accounts[7]);
-        assert(account7Coins.eq(buyCoins[3].mul(referrerBonusPercent).div(100)), "Wrong amount of bonus coins given to accounts[7] after accounts[3] buying coins");
+        assert(account7Coins.eq(bonus1), "Wrong amount of bonus coins given to accounts[7] after accounts[3] buying coins");
         assert(remaining2.eq(remaining1.sub(account3Coins).sub(account7Coins)),  "Wrong remaining coins after accounts[3] buying coins");
 
-        const account1CoinsBefore = await like.balanceOf(accounts[1]);
         await crowdsale.registerReferrer(accounts[4], accounts[1]);
-        await web3.eth.sendTransaction({ from: accounts[4], to: crowdsale.address, value: buyWeis[4] });
+        const registerReferrerEvent2 = await utils.solidityEventPromise(crowdsale.RegisterReferrer());
+        assert.equal(registerReferrerEvent2.args._addr, accounts[4], "registerReferrer event has wrong value on field '_addr'");
+        assert.equal(registerReferrerEvent2.args._referrer, accounts[1], "registerReferrer event has wrong value on field '_referrer'");
+
+        const account1CoinsBefore = await like.balanceOf(accounts[1]);
+        await web3.eth.sendTransaction({ from: accounts[4], to: crowdsale.address, value: buyWeis[4], gas: "200000" });
+        const purchaseEvent2 = await utils.solidityEventPromise(crowdsale.Purchase());
+        assert.equal(purchaseEvent2.args._addr, accounts[4], "Purchase event has wrong value on field '_addr'");
+        assert(purchaseEvent2.args._ethers.eq(buyWeis[4]), "Purchase event has wrong value on field '_ethers'");
+        assert(purchaseEvent2.args._coins.eq(buyCoins[4]), "Purchase event has wrong value on field '_coins'");
+
+        const bonus2 = buyCoins[4].mul(referrerBonusPercent).div(100);
+        const referrerBonusEvent2 = await utils.solidityEventPromise(crowdsale.ReferrerBonus());
+        assert.equal(referrerBonusEvent2.args._referrer, accounts[1], "Purchase event has wrong value on field '_referrer'");
+        assert.equal(referrerBonusEvent2.args._buyer, accounts[4], "Purchase event has wrong value on field '_buyer'");
+        assert(referrerBonusEvent2.args._bonus.eq(bonus2), "Purchase event has wrong value on field '_bonus'");
+
         const remaining3 = await like.balanceOf(crowdsale.address);
         const account4Coins = await like.balanceOf(accounts[4]);
         assert(account4Coins.eq(buyCoins[4]), "Wrong amount of coins given after accounts[4] buying coins");
         const account1CoinsAfter = await like.balanceOf(accounts[1]);
         const account1ReferrerBonus = account1CoinsAfter.sub(account1CoinsBefore);
-        assert(account1ReferrerBonus.eq(buyCoins[4].mul(referrerBonusPercent).div(100)), "Wrong amount of bonus coins given to accounts[1] after accounts[4] buying coins");
+        assert(account1ReferrerBonus.eq(bonus2), "Wrong amount of bonus coins given to accounts[1] after accounts[4] buying coins");
         assert(remaining3.eq(remaining2.sub(account4Coins).sub(account1ReferrerBonus)),  "Wrong remaining coins after accounts[4] buying coins");
     });
 
@@ -218,7 +276,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
     it("should forbid buying 0 coins", async () => {
         await crowdsale.registerKYC([accounts[7]]);
         await utils.assertSolidityThrow(async () => {
-            await web3.eth.sendTransaction({ from: accounts[7], to: crowdsale.address, value: 0 });
+            await web3.eth.sendTransaction({ from: accounts[7], to: crowdsale.address, value: 0, gas: "200000" });
         }, "accounts[7] is buying 0 coins, which should be forbidden");
     });
 
@@ -236,7 +294,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async() => {
             const remaining = await like.balanceOf(crowdsale.address);
             assert(!remaining.lt(coinsPerEth), "Remaining coins is less than the value of 1 wei, please check test case");
-            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: 1 });
+            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: 1, gas: "200000" });
         }, "Buying coins after crowdsale ends should be forbidden");
     });
 
@@ -252,11 +310,12 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const ownerBalance1 = web3.eth.getBalance(accounts[0]);
         const contractBalance1 = web3.eth.getBalance(crowdsale.address);
         await crowdsale.finalize({gasPrice: 0});
+        await utils.solidityEventPromise(crowdsale.Finalize());
         const ownerBalance2 = web3.eth.getBalance(accounts[0]);
         const contractBalance2 = web3.eth.getBalance(crowdsale.address);
         assert(ownerBalance2.eq(ownerBalance1.add(contractBalance1)), "Wrong owner balance after finalization");
-        assert.equal(contractBalance2.toNumber(), 0, "Wrong contract balance after finalization");
-        assert.equal((await like.balanceOf(crowdsale.address)).toNumber(), 0, "No coins should remain after finalization");
+        assert(contractBalance2.eq(0), "Wrong contract balance after finalization");
+        assert((await like.balanceOf(crowdsale.address)).eq(0), "No coins should remain after finalization");
     });
 
     it("should forbid calling finalize more than once", async () => {
@@ -318,7 +377,7 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(start + 1 - now);
         await crowdsale.registerKYC([accounts[1], accounts[2]]);
-        await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1] });
+        await web3.eth.sendTransaction({ from: accounts[1], to: crowdsale.address, value: buyWeis[1], gas: "200000" });
     });
 
     it("should forbid adding private fund after crowdsale started", async () => {
@@ -331,25 +390,25 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
     it("should forbid buying more coins than remaining", async () => {
         const remaining = await like.balanceOf(crowdsale.address);
         await utils.assertSolidityThrow(async () => {
-            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: remaining.div(coinsPerEth).add(1) });
+            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: remaining.div(coinsPerEth).add(1), gas: "200000" });
         }, "Buying more coins than remaining should be forbidden");
 
         await crowdsale.registerReferrer(accounts[3], accounts[1]);
         const toBuyWeis = remaining.mul(100).div(100 + referrerBonusPercent).div(coinsPerEth);
         assert(toBuyWeis.floor().eq(toBuyWeis), "Number of coins to buy is not an integer, check test case");
         await utils.assertSolidityThrow(async () => {
-            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: toBuyWeis.add(1) });
+            await web3.eth.sendTransaction({ from: accounts[3], to: crowdsale.address, value: toBuyWeis.add(1), gas: "200000" });
         }, "Buying more coins (bonus included) than remaining should be forbidden");
     });
 
     it("should allow buying exactly all remaining coins", async () => {
-        await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2] });
-        assert.equal((await like.balanceOf(crowdsale.address)).toNumber(), 0, "Still have coins remaining, please adjust test case");
+        await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000" });
+        assert((await like.balanceOf(crowdsale.address)).eq(0), "Still have coins remaining, please adjust test case");
     });
 
     it("should forbid buying coins when no coin remains", async () => {
         await utils.assertSolidityThrow(async () => {
-            await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: 1 });
+            await web3.eth.sendTransaction({ from: accounts[2], to: crowdsale.address, value: 1, gas: "200000" });
         }, "Should not be able to buy coins when no coin remains");
     });
 
@@ -363,7 +422,7 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         const ownerBalance2 = web3.eth.getBalance(accounts[0]);
         const contractBalance2 = web3.eth.getBalance(crowdsale.address);
         assert(ownerBalance2.eq(ownerBalance1.add(contractBalance1)), "Wrong owner balance after finalization");
-        assert.equal(contractBalance2.toNumber(), 0, "Wrong contract balance after finalization");
+        assert(contractBalance2.eq(0), "Wrong contract balance after finalization");
     });
 });
 
