@@ -12,7 +12,6 @@ contract ContributorPool {
     uint256 public lockDuration = 0;
 
     uint256 lockedCoin = 0;
-    // mapping (uint64 => uint256) giveUnlockTime; // TODO move to give info
     address[] public owners;
     mapping (address => uint256) ownerIndex;
 
