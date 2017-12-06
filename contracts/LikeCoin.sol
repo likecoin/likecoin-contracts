@@ -22,7 +22,8 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
-    event TransferLocked(address indexed _from, address indexed _to, uint256 _value);
+
+    event Lock(address indexed _addr, uint256 _value);
 
     function LikeCoin(uint256 _initialSupply, uint256 _airdropLimit) public {
         owner = msg.sender;
@@ -63,7 +64,8 @@ contract LikeCoin is ERC20 {
         require(lockedBalances[_to] + _value > lockedBalances[_to]);
         balances[msg.sender] -= _value;
         lockedBalances[_to] += _value;
-        TransferLocked(msg.sender, _to, _value);
+        Transfer(msg.sender, _to, _value);
+        Lock(_to, _value);
         return true;
     }
 
