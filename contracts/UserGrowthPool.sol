@@ -43,7 +43,7 @@ contract UserGrowthPool {
     mapping (uint64 => TransferInfo) transferInfo;
     mapping (uint64 => SetOwnersInfo) setOwnersInfo;
 
-    function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) {
+    function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) public {
         require(_owners.length < 256);
         require(_owners.length > 0);
         require(_threshold > 0);
@@ -59,7 +59,7 @@ contract UserGrowthPool {
         mintValue = _mintValue;
     }
 
-    function ownersCount() constant returns (uint) {
+    function ownersCount() public constant returns (uint) {
         return owners.length;
     }
 
@@ -69,12 +69,12 @@ contract UserGrowthPool {
         return id;
     }
 
-    function mint() {
+    function mint() public {
         require(now >= mintTime);
         like.mintForUserGrowthPool(mintValue);
     }
 
-    function proposeTransfer(address _to, uint256 _value) {
+    function proposeTransfer(address _to, uint256 _value) public {
         require(ownerIndex[msg.sender] != 0);
         require(_value > 0);
         uint64 id = _nextId();
@@ -85,7 +85,7 @@ contract UserGrowthPool {
 
     mapping (address => bool) ownerDuplicationCheck;
 
-    function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) {
+    function proposeSetOwners(address[] _newOwners, uint8 _newThreshold) public {
         require(ownerIndex[msg.sender] != 0);
         require(_newOwners.length < 256);
         require(_newOwners.length > 0);
@@ -104,7 +104,7 @@ contract UserGrowthPool {
         SetOwnersProposal(id, msg.sender, _newOwners, _newThreshold);
     }
 
-    function confirmProposal(uint64 id) {
+    function confirmProposal(uint64 id) public {
         require(id >= minUsableId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded > 0);
@@ -116,7 +116,7 @@ contract UserGrowthPool {
         ProposalConfirmation(id, msg.sender);
     }
 
-    function executeProposal(uint64 id) {
+    function executeProposal(uint64 id) public {
         require(id >= minUsableId);
         require(proposals[id].id == id);
         require(proposals[id].confirmNeeded == 0);
