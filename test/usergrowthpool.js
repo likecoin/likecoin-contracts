@@ -342,8 +342,6 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should allow set owners with confirmations", async () => {
-        await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
-        const transferProposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
         await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[1]});
         const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
         const proposalId = setOwnersProposal.args._id;
@@ -351,6 +349,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         const _newOwners = setOwnersProposal.args._newOwners;
         assert.deepEqual(_newOwners, newOwners, "Wrong newOwners in SetOwnersProposal event");
         assert.equal(setOwnersProposal.args._newThreshold.toNumber(), newThreshold, "Wrong newThreshold in SetOwnersProposal event");
+        await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
+        const transferProposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[1]});
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await pools[0].confirmProposal(proposalId, {from: accounts[3]});

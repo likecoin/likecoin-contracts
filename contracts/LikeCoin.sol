@@ -134,7 +134,7 @@ contract LikeCoin is ERC20 {
         require(msg.sender == owner);
         require(userGrowthPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
-        for (uint i = 0; i < _poolAddrs.length; i++) {
+        for (uint i = 0; i < _poolAddrs.length; ++i) {
             userGrowthPoolAddrs.push(_poolAddrs[i]);
             isUserGrowthPool[_poolAddrs[i]] = true;
         }
