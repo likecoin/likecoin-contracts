@@ -17,6 +17,14 @@ contract LikeCrowdsale {
     bool privateFundFinalized = false;
     bool finalized = false;
 
+    event AddPrivateFund(address indexed _addr, uint256 _value);
+    event FinalizePrivateFund();
+    event RegisterKYC(address indexed _addr);
+    event RegisterReferrer(address indexed _addr, address indexed _referrer);
+    event Purchase(address indexed _addr, uint256 _ethers, uint256 _coins);
+    event ReferrerBonus(address indexed _referrer, address indexed _buyer, uint256 _bonus);
+    event Finalize();
+
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) public {
         require(_hardCap != 0);
         require(_coinsPerEth != 0);
@@ -40,17 +48,20 @@ contract LikeCrowdsale {
         require(_value > 0);
         require(like.balanceOf(this) >= _value);
         like.transferAndLock(_addr, _value);
+        AddPrivateFund(_addr, _value);
     }
 
     function finalizePrivateFund() public {
         require(msg.sender == owner);
         privateFundFinalized = true;
+        FinalizePrivateFund();
     }
 
     function registerKYC(address[] _customerAddrs) public {
         require(msg.sender == owner);
         for (uint32 i = 0; i < _customerAddrs.length; ++i) {
             kycDone[_customerAddrs[i]] = true;
+            RegisterKYC(_customerAddrs[i]);
         }
     }
 
@@ -58,6 +69,7 @@ contract LikeCrowdsale {
         require(msg.sender == owner);
         require(referrer[_addr] == 0x0);
         referrer[_addr] = _referrer;
+        RegisterReferrer(_addr, _referrer);
     }
 
     function () public payable {
@@ -69,10 +81,13 @@ contract LikeCrowdsale {
         uint256 coins = coinsPerEth * msg.value;
         require(coins / msg.value == coinsPerEth);
         like.transfer(msg.sender, coins);
+        Purchase(msg.sender, msg.value, coins);
         if (referrer[msg.sender] != 0x0) {
             uint256 bonusEnlarged = coins * referrerBonusPercent;
             require(bonusEnlarged / referrerBonusPercent == coins);
-            like.transfer(referrer[msg.sender], bonusEnlarged / 100);
+            uint256 bonus = bonusEnlarged / 100;
+            like.transfer(referrer[msg.sender], bonus);
+            ReferrerBonus(referrer[msg.sender], msg.sender, bonus);
         }
     }
 
@@ -87,5 +102,6 @@ contract LikeCrowdsale {
             like.burn(remainingCoins);
         }
         finalized = true;
+        Finalize();
     }
 }

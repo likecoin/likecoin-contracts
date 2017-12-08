@@ -44,6 +44,16 @@ function solidityEventPromise(eventSource, timeout=10000) {
     });
 }
 
+function solidityEvent(callResult, eventName) {
+    const logs = callResult.logs.filter((log) => log.event === eventName);
+    if (logs.length === 0) {
+        throw new Error(`No event named ${event} found`);
+    } else if (logs.length > 1) {
+        throw new Error(`More than one event named ${event}`);
+    }
+    return logs[0];
+}
+
 function jsonRpc(method, ...params) {
     return new Promise((resolve, reject) => {
         return web3.currentProvider.sendAsync({
@@ -96,6 +106,7 @@ function coinsToCoinUnits(value) {
 
 module.exports = {
     assertSolidityThrow,
+    solidityEvent,
     solidityEventPromise,
     testrpcIncreaseTime,
     setBalance,

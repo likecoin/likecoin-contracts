@@ -54,7 +54,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             const pool = pools[i];
             const ownersCount = (await pool.ownersCount()).toNumber();
             assert.equal(ownersCount, owners.length, `pools[${i}] has wrong number of owners`);
-            for (let j = 0; j < ownersCount; j++) {
+            for (let j = 0; j < ownersCount; ++j) {
                 assert.equal(await pool.owners(j), owners[j], `pools[${i}] has wrong owner at index ${j}`);
             }
             assert.equal((await pool.threshold()).toNumber(), threshold, `pools[${i}] has wrong threshold`);
@@ -100,7 +100,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     it("should forbid minting before mintTime", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(mintTimes[3] + 1 - now);
-        for (let i = 4; i < Object.keys(mintValues).length; i++) {
+        for (let i = 4; i < Object.keys(mintValues).length; ++i) {
             const pool = pools[i];
             const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
             assert.isBelow(now, (await pool.mintTime()).toNumber(), `Blocktime is already after mintTime of pools[${i}], please adjust test case`);
@@ -143,21 +143,21 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         const poolBalanceBefore = await like.balanceOf(pools[0].address);
         const accountBalanceBefore = await like.balanceOf(accounts[1]);
         const value = 123456789;
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const transferProposal = await utils.solidityEventPromise(pools[0].TransferProposal());
+        let callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const transferProposal = utils.solidityEvent(callResult, "TransferProposal");
         const proposalId = transferProposal.args._id;
         assert.equal(transferProposal.args._proposer, accounts[1], "Wrong proposer address in TransferProposal event");
         assert.equal(transferProposal.args._to, accounts[1], "Wrong to-address in TransferProposal event");
         assert(transferProposal.args._value.eq(value), "Wrong value in TransferProposal event");
         const signers = [1, 2, 5];
-        for (let i = 0; i < threshold; i++) {
-            await pools[0].confirmProposal(proposalId, {from: accounts[signers[i]]});
-            const confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        for (let i = 0; i < threshold; ++i) {
+            callResult = await pools[0].confirmProposal(proposalId, {from: accounts[signers[i]]});
+            const confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
             assert(confirm.args._id.eq(proposalId), "Wrong proposal ID in confirm event");
             assert.equal(confirm.args._confirmer, accounts[signers[i]], "Wrong confirmer address in confirm event");
         }
-        await pools[0].executeProposal(proposalId, {from: accounts[1]});
-        const execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        callResult = await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        const execution = utils.solidityEvent(callResult, "ProposalExecution");
         assert(execution.args._id.eq(proposalId), "Wrong proposal ID in execution event");
         assert.equal(execution.args._executer, accounts[1], "Wrong proposal ID in execution event");
         const poolBalanceAfter = await like.balanceOf(pools[0].address);
@@ -168,8 +168,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
 
     it("should forbid executing transfer proposal without enough confirmations", async () => {
         const value = 234567890;
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        let callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
 
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await utils.assertSolidityThrow(async () => {
@@ -191,86 +191,86 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         const value2 = 456789012;
         const value3 = 567890123;
 
-        await pools[0].proposeTransfer(accounts[1], value1, {from: accounts[2]});
-        const proposalId1 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        let callResult = await pools[0].proposeTransfer(accounts[1], value1, {from: accounts[2]});
+        const proposalId1 = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
 
-        await pools[0].proposeTransfer(accounts[1], value2, {from: accounts[3]});
-        const proposalId2 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        callResult = await pools[0].proposeTransfer(accounts[1], value2, {from: accounts[3]});
+        const proposalId2 = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         assert(!proposalId1.eq(proposalId2), "Two proposals have the same ID");
 
-        await pools[0].proposeTransfer(accounts[1], value3, {from: accounts[4]});
-        const proposalId3 = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        callResult = await pools[0].proposeTransfer(accounts[1], value3, {from: accounts[4]});
+        const proposalId3 = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         assert(!proposalId1.eq(proposalId3), "Two proposals have the same ID");
         assert(!proposalId2.eq(proposalId3), "Two proposals have the same ID");
 
         let confirm;
         let execution;
 
-        await pools[0].confirmProposal(proposalId1, {from: accounts[1]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId1, {from: accounts[1]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[1], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId2, {from: accounts[2]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId2, {from: accounts[2]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[2], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId3, {from: accounts[3]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId3, {from: accounts[3]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
 
         // Out of order
-        await pools[0].confirmProposal(proposalId2, {from: accounts[3]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId2, {from: accounts[3]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId3, {from: accounts[4]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId3, {from: accounts[4]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[4], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId1, {from: accounts[2]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId1, {from: accounts[2]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[2], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
 
         // Out of order
-        await pools[0].confirmProposal(proposalId3, {from: accounts[5]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId3, {from: accounts[5]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[5], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId3), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId1, {from: accounts[3]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId1, {from: accounts[3]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[3], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId1), "Wrong proposal ID in confirm event");
 
-        await pools[0].confirmProposal(proposalId2, {from: accounts[4]});
-        confirm = await utils.solidityEventPromise(pools[0].ProposalConfirmation());
+        callResult = await pools[0].confirmProposal(proposalId2, {from: accounts[4]});
+        confirm = utils.solidityEvent(callResult, "ProposalConfirmation");
         assert.equal(confirm.args._confirmer, accounts[4], "Wrong confirmer address in confirm event");
         assert(confirm.args._id.eq(proposalId2), "Wrong proposal ID in confirm event");
 
-        await pools[0].executeProposal(proposalId3, {from: accounts[5]});
-        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        callResult = await pools[0].executeProposal(proposalId3, {from: accounts[5]});
+        execution = utils.solidityEvent(callResult, "ProposalExecution");
         assert(execution.args._id.eq(proposalId3), "Wrong proposal ID in execution event");
         const poolBalanceAfter3 = await like.balanceOf(pools[0].address);
         const accountBalanceAfter3 = await like.balanceOf(accounts[1]);
         assert(poolBalanceAfter3.eq(poolBalanceBefore.sub(value3)), "pools[0] owned wrong amount of coins after executing proposal 3");
         assert(accountBalanceAfter3.eq(accountBalanceBefore.add(value3)), "accounts[1] owned wrong amount of coins after executing proposal 3");
 
-        await pools[0].executeProposal(proposalId1, {from: accounts[3]});
-        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        callResult = await pools[0].executeProposal(proposalId1, {from: accounts[3]});
+        execution = utils.solidityEvent(callResult, "ProposalExecution");
         assert(execution.args._id.eq(proposalId1), "Wrong proposal ID in execution event");
         const poolBalanceAfter1 = await like.balanceOf(pools[0].address);
         const accountBalanceAfter1 = await like.balanceOf(accounts[1]);
         assert(poolBalanceAfter1.eq(poolBalanceAfter3.sub(value1)), "pools[0] owned wrong amount of coins after executing proposal 1");
         assert(accountBalanceAfter1.eq(accountBalanceAfter3.add(value1)), "accounts[1] owned wrong amount of coins after executing proposal 1");
 
-        await pools[0].executeProposal(proposalId2, {from: accounts[4]});
-        execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        callResult = await pools[0].executeProposal(proposalId2, {from: accounts[4]});
+        execution = utils.solidityEvent(callResult, "ProposalExecution");
         assert(execution.args._id.eq(proposalId2), "Wrong proposal ID in execution event");
         const poolBalanceAfter2 = await like.balanceOf(pools[0].address);
         const accountBalanceAfter2 = await like.balanceOf(accounts[1]);
@@ -284,8 +284,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             await pools[0].proposeTransfer(accounts[1], value, {from: accounts[6]});
         }, "should forbid non-owner to propose transfer proposal");
 
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        const callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
 
         await utils.assertSolidityThrow(async () => {
             await pools[0].confirmProposal(proposalId, {from: accounts[7]});
@@ -303,8 +303,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
 
     it("should forbid duplicated confirmation from the same confirmer", async () => {
         const value = 789012345;
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        const callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await pools[0].confirmProposal(proposalId, {from: accounts[1]});
@@ -314,8 +314,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
 
     it("should forbid duplicated execution of TransferProposal", async () => {
         const value = 890123456;
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        let callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[1]});
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await pools[0].confirmProposal(proposalId, {from: accounts[3]});
@@ -330,8 +330,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
 
     it("should forbid confirming TransferProposal more than required", async () => {
         const value = 901234567;
-        await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
-        const proposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        const callResult = await pools[0].proposeTransfer(accounts[1], value, {from: accounts[1]});
+        const proposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await pools[0].confirmProposal(proposalId, {from: accounts[3]});
         await pools[0].confirmProposal(proposalId, {from: accounts[4]});
@@ -342,24 +342,24 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should allow set owners with confirmations", async () => {
-        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[1]});
-        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        let callResult = await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[1]});
+        const setOwnersProposal = utils.solidityEvent(callResult, "SetOwnersProposal");
         const proposalId = setOwnersProposal.args._id;
         assert.equal(setOwnersProposal.args._proposer, accounts[1], "Wrong proposer address in SetOwnersProposal event");
         const _newOwners = setOwnersProposal.args._newOwners;
         assert.deepEqual(_newOwners, newOwners, "Wrong newOwners in SetOwnersProposal event");
         assert.equal(setOwnersProposal.args._newThreshold.toNumber(), newThreshold, "Wrong newThreshold in SetOwnersProposal event");
-        await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
-        const transferProposalId = (await utils.solidityEventPromise(pools[0].TransferProposal())).args._id;
+        callResult = await pools[0].proposeTransfer(accounts[1], 1, {from: accounts[1]});
+        const transferProposalId = (utils.solidityEvent(callResult, "TransferProposal")).args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[1]});
         await pools[0].confirmProposal(proposalId, {from: accounts[2]});
         await pools[0].confirmProposal(proposalId, {from: accounts[3]});
-        await pools[0].executeProposal(proposalId, {from: accounts[1]});
-        const execution = await utils.solidityEventPromise(pools[0].ProposalExecution());
+        callResult = await pools[0].executeProposal(proposalId, {from: accounts[1]});
+        const execution = utils.solidityEvent(callResult, "ProposalExecution");
         assert(execution.args._id.eq(proposalId), "Wrong proposal ID in execution event");
         const ownersCount = (await pools[0].ownersCount()).toNumber();
         assert.equal(ownersCount, newOwners.length, "pools[0] has wrong number of owners after executing SetOwnersProposal");
-        for (let i = 0; i < ownersCount; i++) {
+        for (let i = 0; i < ownersCount; ++i) {
             assert.equal(await pools[0].owners(i), newOwners[i], `pools[0] has wrong owner at index ${i} after executing SetOwnersProposal`);
         }
         assert.equal((await pools[0].threshold()).toNumber(), newThreshold, "pools[0] has wrong threshold after executing SetOwnersProposal");
@@ -372,7 +372,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should void old owners", async () => {
-        for (let i = 1; i <= 4; i++) {
+        for (let i = 1; i <= 4; ++i) {
             await utils.assertSolidityThrow(async () => {
                 await pools[0].proposeTransfer(accounts[1], 123456789, {from: accounts[i]});
             }, `should not allow old owner accounts[${i}] to propose TransferProposal`);
@@ -383,12 +383,12 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should void all pending proposals after set owners", async () => {
-        for (let i = 0; i < unconfirmedPendingProposals.length; i++) {
+        for (let i = 0; i < unconfirmedPendingProposals.length; ++i) {
             await utils.assertSolidityThrow(async () => {
                 await pools[0].confirmProposal(unconfirmedPendingProposals[i], {from: accounts[5]});
             }, "should not allow confirming old proposals");
         }
-        for (let i = 0; i < confirmedPendingProposals.length; i++) {
+        for (let i = 0; i < confirmedPendingProposals.length; ++i) {
             await utils.assertSolidityThrow(async () => {
                 await pools[0].executeProposal(confirmedPendingProposals[i], {from: accounts[5]});
             }, "should not allow executing old proposals");
@@ -396,8 +396,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should not allow executing set owners without enough confirm", async () => {
-        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
-        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const callResult = await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = utils.solidityEvent(callResult, "SetOwnersProposal");
         const proposalId = setOwnersProposal.args._id;
         await utils.assertSolidityThrow(async () => {
             await pools[0].executeProposal(proposalId, {from: accounts[5]});
@@ -413,8 +413,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
             await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[9]});
         }, "should not allow non-owner to propose SetOwnersProposal");
 
-        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
-        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const callResult = await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = utils.solidityEvent(callResult, "SetOwnersProposal");
         const proposalId = setOwnersProposal.args._id;
 
         await utils.assertSolidityThrow(async () => {
@@ -430,8 +430,8 @@ contract("LikeCoin User Growth Pools", (accounts) => {
     });
 
     it("should forbid confirming SetOwnersProposal more than required", async () => {
-        await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
-        const setOwnersProposal = await utils.solidityEventPromise(pools[0].SetOwnersProposal());
+        const callResult = await pools[0].proposeSetOwners(newOwners, newThreshold, {from: accounts[5]});
+        const setOwnersProposal = utils.solidityEvent(callResult, "SetOwnersProposal");
         const proposalId = setOwnersProposal.args._id;
         await pools[0].confirmProposal(proposalId, {from: accounts[6]});
         await pools[0].confirmProposal(proposalId, {from: accounts[7]});
@@ -497,7 +497,7 @@ contract("LikeCoin User Growth Pools Invalid IDs", (accounts) => {
         await utils.testrpcIncreaseTime(mintTime + 1 - now);
         await pool.mint();
         const upperBound = new BigNumber(2).pow(64);
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 10; ++i) {
             await utils.assertSolidityThrow(async () => {
                 await pool.confirmProposal(i, {from: accounts[0]});
             }, `should forbid confirming invalid proposal with ID ${i}`);
@@ -522,13 +522,13 @@ contract("LikeCoin User Growth Pools Invalid IDs", (accounts) => {
             }, `should forbid executing invalid proposal with ID ${randId.toFixed()}`);
         }
         // repeat after setOwners
-        await pool.proposeSetOwners([accounts[0]], 1, {from: accounts[0]});
-        const setOwnersProposal = await utils.solidityEventPromise(pool.SetOwnersProposal());
+        const callResult = await pool.proposeSetOwners([accounts[0]], 1, {from: accounts[0]});
+        const setOwnersProposal = utils.solidityEvent(callResult, "SetOwnersProposal");
         const proposalId = setOwnersProposal.args._id;
         await pool.confirmProposal(proposalId, {from: accounts[0]});
         await pool.executeProposal(proposalId, {from: accounts[0]});
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 10; ++i) {
             await utils.assertSolidityThrow(async () => {
                 await pool.confirmProposal(i, {from: accounts[0]});
             }, `should forbid confirming invalid proposal with ID ${i}`);

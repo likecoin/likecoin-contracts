@@ -231,17 +231,22 @@ contract("LikeCoinEvents", (accounts) => {
     });
 
     it("should emit Transfer event after transaction", async () => {
-        await like.airdrop([accounts[0]], initialAmount);
-        const event = await utils.solidityEventPromise(like.Transfer());
-        assert.equal(event.args._from, like.address, "Transfer event has wrong value on field '_from'");
-        assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-        assert(event.args._value.eq(initialAmount), "Transfer event has wrong value on field '_value'");
+        const callResult = await like.airdrop([accounts[0], accounts[1], accounts[2]], 10000);
+        const logs = callResult.logs.filter((log) => log.event === "Transfer");
+        assert.equal(logs.length, 3,  "Wrong number of Transfer events");
+        for (let i = 0; i < 2; ++i) {
+            const events = logs.filter((log) => log.args._to === accounts[i]);
+            assert.equal(events.length, 1, `Wrong number of Transfer events for accounts[${i}]`);
+            const event = events[0];
+            assert.equal(event.args._from, like.address, "Transfer event has wrong value on field '_from'");
+            assert(event.args._value.eq(10000), "Transfer event has wrong value on field '_value'");
+        }
     });
 
     const transferAmount = 271;
     it("should emit Transfer event after transaction", async () => {
-        await like.transfer(accounts[1], transferAmount, {from: accounts[0]});
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.transfer(accounts[1], transferAmount, {from: accounts[0]});
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(transferAmount), "Transfer event has wrong value on field '_value'");
@@ -249,16 +254,16 @@ contract("LikeCoinEvents", (accounts) => {
 
     const allowance = 10000;
     it(`should emit Approval event after approve`, async () => {
-        await like.approve(accounts[1], allowance, {from: accounts[0]});
-        const approvalEvent = await utils.solidityEventPromise(like.Approval());
-        assert.equal(approvalEvent.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
-        assert.equal(approvalEvent.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
-        assert(approvalEvent.args._value.eq(allowance), "Approval event has wrong value on field '_value'");
+        const callResult = await like.approve(accounts[1], allowance, {from: accounts[0]});
+        const event = utils.solidityEvent(callResult, "Approval");
+        assert.equal(event.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
+        assert.equal(event.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
+        assert(event.args._value.eq(allowance), "Approval event has wrong value on field '_value'");
     });
 
     it("should emit Transfer event after transferFrom", async () => {
-        await like.transferFrom(accounts[0], accounts[2], transferAmount, {from: accounts[1]});
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.transferFrom(accounts[0], accounts[2], transferAmount, {from: accounts[1]});
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[2], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(transferAmount), "Transfer event has wrong value on field '_value'");
@@ -266,8 +271,8 @@ contract("LikeCoinEvents", (accounts) => {
 
     const burnAmount = 161;
     it(`should emit Transfer event after burn`, async () => {
-        await like.burn(burnAmount);
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.burn(burnAmount);
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, 0x0, "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(burnAmount), "Transfer event has wrong value on field '_value'");
@@ -276,8 +281,8 @@ contract("LikeCoinEvents", (accounts) => {
     const crowdsaleAmount = 100000;
     it(`should emit Transfer event after minting for crowdsale`, async () => {
         const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 1000000;
-        await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(crowdsaleAmount), "Transfer event has wrong value on field '_value'");
@@ -285,8 +290,8 @@ contract("LikeCoinEvents", (accounts) => {
 
     const contributorPoolAmount = 200000;
     it(`should emit Transfer event after minting for contributor pool`, async () => {
-        await like.registerContributorPool(accounts[0], contributorPoolAmount);
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.registerContributorPool(accounts[0], contributorPoolAmount);
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(contributorPoolAmount), "Transfer event has wrong value on field '_value'");
@@ -295,8 +300,8 @@ contract("LikeCoinEvents", (accounts) => {
     const userGrowthPoolAmount = 300000;
     it(`should emit Transfer event after minting for user growth pool`, async () => {
         await like.registerUserGrowthPools([accounts[0]]);
-        await like.mintForUserGrowthPool(userGrowthPoolAmount);
-        const event = await utils.solidityEventPromise(like.Transfer());
+        const callResult = await like.mintForUserGrowthPool(userGrowthPoolAmount);
+        const event = utils.solidityEvent(callResult, "Transfer");
         assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
         assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
@@ -305,8 +310,8 @@ contract("LikeCoinEvents", (accounts) => {
     it("should emit TransferLocked event after transfer and lock", async () => {
         const balance = await like.balanceOf(accounts[0]);
         assert(!balance.eq(0), "Banalce in accounts[0] is 0, please check test case");
-        await like.transferAndLock(accounts[1], balance, {from: accounts[0]});
-        const event = await utils.solidityEventPromise(like.TransferLocked());
+        const callResult = await like.transferAndLock(accounts[1], balance, {from: accounts[0]});
+        const event = utils.solidityEvent(callResult, "TransferLocked");
         assert.equal(event.args._from, accounts[0], "TransferLocked event has wrong value on field '_from'");
         assert.equal(event.args._to, accounts[1], "TransferLocked event has wrong value on field '_to'");
         assert(event.args._value.eq(balance), "TransferLocked event has wrong value on field '_value'");
