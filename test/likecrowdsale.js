@@ -185,12 +185,11 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         assert(remaining1.sub(buyCoins[1]).eq(remaining2), "Wrong remaining coins after accounts[1] buying coins");
         const account1Coins = await like.balanceOf(accounts[1]);
         assert(account1Coins.eq(buyCoins[1]), "Wrong amount of coins given after accounts[1] buying coins");
-        const registerKYCEvents = (await crowdsale.registerKYC([accounts[2], accounts[3], accounts[4]])).logs;
-        const registerExpectedCount = {[accounts[2]]: 1, [accounts[3]]: 1, [accounts[4]]: 1};
-        registerKYCEvents.forEach((event) => {
-            const addr = event.args._addr;
-            assert(registerExpectedCount[addr], "Wrong RegisterKYC events");
-            registerExpectedCount[addr] -= 1;
+        const registerKYCEvents = (await crowdsale.registerKYC([accounts[2], accounts[3], accounts[4]])).logs.filter((e) => e.event === "RegisterKYC");
+        assert.equal(registerKYCEvents.length, 3, "Wrong Number of RegisterKYC events");
+        [2, 3, 4].forEach((accountIndex) => {
+            const event = registerKYCEvents.filter((e) => e.event === "RegisterKYC" && e.args._addr === accounts[accountIndex]);
+            assert.equal(event.length, 1, "Wrong number of RegisterKYC events");
         });
         await web3.eth.sendTransaction({from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000"});
         const purchaseEvent2 = await utils.solidityEventPromise(crowdsale.Purchase());

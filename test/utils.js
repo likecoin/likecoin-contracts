@@ -45,13 +45,6 @@ function solidityEventPromise(eventSource, timeout=10000) {
 }
 
 function solidityEvent(callResult, eventName) {
-    if (typeof(callResult) === "string") {
-        callResult = web3.eth.getTransactionReceipt(callResult);
-        callResult.logs.forEach((log) => {
-            console.log(log.topics);
-            console.log(log.data);
-        });
-    }
     const logs = callResult.logs.filter((log) => log.event === eventName);
     if (logs.length === 0) {
         throw new Error(`No event named ${event} found`);
