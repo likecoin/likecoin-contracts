@@ -307,13 +307,16 @@ contract("LikeCoinEvents", (accounts) => {
         assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
     });
 
-    it("should emit TransferLocked event after transfer and lock", async () => {
+    it("should emit Transfer and Lock events after transfer and lock", async () => {
         const balance = await like.balanceOf(accounts[0]);
         assert(!balance.eq(0), "Banalce in accounts[0] is 0, please check test case");
         const callResult = await like.transferAndLock(accounts[1], balance, {from: accounts[0]});
-        const event = utils.solidityEvent(callResult, "TransferLocked");
-        assert.equal(event.args._from, accounts[0], "TransferLocked event has wrong value on field '_from'");
-        assert.equal(event.args._to, accounts[1], "TransferLocked event has wrong value on field '_to'");
-        assert(event.args._value.eq(balance), "TransferLocked event has wrong value on field '_value'");
+        const transferEvent = utils.solidityEvent(callResult, "Transfer");
+        assert.equal(transferEvent.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
+        assert.equal(transferEvent.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
+        assert(transferEvent.args._value.eq(balance), "Transfer event has wrong value on field '_value'");
+        const lockEvent = utils.solidityEvent(callResult, "Lock");
+        assert.equal(lockEvent.args._addr, accounts[1], "Lock event has wrong value on field '_addr'");
+        assert(lockEvent.args._value.eq(balance), "Lock event has wrong value on field '_value'");
     });
 });
