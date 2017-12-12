@@ -1,6 +1,6 @@
-# Like Coin Token Contracts
+# LikeCoin Smart Contracts
 
-This is the repo of the Ethereum smart contracts related to the [Like Coin](https://like.community/).
+This is the repo of the Ethereum smart contracts related to the [LikeCoin](https://like.community/).
 
 The contracts are tested using the [Truffle](http://truffleframework.com/) framework.
 
