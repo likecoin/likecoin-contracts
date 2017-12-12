@@ -1,12 +1,27 @@
 {
-  "name": "like-contracts",
-  "version": "0.0.1",
-  "description": "Contracts for Like Coin",
+  "name": "likecoin-contracts",
+  "version": "1.0.0",
+  "license": "GPL-3.0",
+  "description": "Ethereum Smart Contracts for LikeCoin",
+  "keywords": [
+    "LikeCoin",
+    "Ethereum",
+    "Blockchain"
+  ],
+  "homepage": "https://like.community/",
   "scripts": {
     "server": "./testrpc.js",
-    "test": "truffle test"
+    "test": "truffle test",
+    "compile": "truffle compile"
   },
-  "author": "nnkken",
+  "contributors": [
+    "Chung Wu <chung@likecoin.foundation>",
+    "Michael Cheung <michael@likecoin.foundation>"
+  ],
+  "repository": "likecoin/likecoin-contracts",
+  "engines" : {
+    "node" : ">=8.0.0"
+  },
   "dependencies": {
     "bignumber.js": "^4.1.0"
   },
