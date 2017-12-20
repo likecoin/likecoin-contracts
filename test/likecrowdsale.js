@@ -365,7 +365,7 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         2: buyCoins[2].div(coinsPerEth), // 4,200 Ether
     };
 
-    const unlockTime = 0x7FFFFFFF;
+    let unlockTime;
     let start;
     let end;
     let like;
@@ -378,6 +378,7 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         let now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         start = now + 1000;
         end = start + crowdsaleLength;
+        unlockTime = now + 0xFFFFFFFF;
         like = await LikeCoin.new(0, 0);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
         await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
