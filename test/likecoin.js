@@ -155,10 +155,8 @@ contract("LikeCoin", (accounts) => {
         }, "Allowance should be all consumed already");
     });
 
-    it("should forbid transfer 0 LIKE", async () => {
-        await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[1], 0, {from: accounts[0]});
-        }, "Transferring 0 LIKE should be forbidden");
+    it("should allow transfer 0 LIKE", async () => {
+        await like.transfer(accounts[1], 0, {from: accounts[0]});
     });
 
     it("should allow transfer all balance", async () => {
