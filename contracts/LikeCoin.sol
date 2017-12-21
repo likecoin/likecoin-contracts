@@ -63,7 +63,7 @@ contract LikeCoin is ERC20 {
             delete lockedBalances[_from];
         }
         require(balances[_from] >= _value);
-        require(balances[_to] + _value > balances[_to]);
+        require(balances[_to] + _value >= balances[_to]);
         balances[_from] -= _value;
         balances[_to] += _value;
         Transfer(_from, _to, _value);
