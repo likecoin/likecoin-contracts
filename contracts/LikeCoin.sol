@@ -18,6 +18,7 @@
 pragma solidity ^0.4.18;
 
 import "./ERC20.sol";
+import "./TransferAndCallReceiver.sol";
 
 contract LikeCoin is ERC20 {
     string constant public name = "LikeCoin";
@@ -39,6 +40,7 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
+    mapping (address => mapping (uint256 => bool)) public usedNonce;
 
     event Lock(address indexed _addr, uint256 _value);
 
@@ -57,11 +59,15 @@ contract LikeCoin is ERC20 {
         return balances[_owner] + lockedBalances[_owner];
     }
 
-    function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
+    function _moveLockedBalance(address _from) internal {
         if (unlockTime != 0 && now >= unlockTime && lockedBalances[_from] > 0) {
             balances[_from] += lockedBalances[_from];
             delete lockedBalances[_from];
         }
+    }
+
+    function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
+        _moveLockedBalance(_from);
         require(balances[_from] >= _value);
         require(balances[_to] + _value >= balances[_to]);
         balances[_from] -= _value;
@@ -101,6 +107,59 @@ contract LikeCoin is ERC20 {
 
     function allowance(address _owner, address _spender) public constant returns (uint256 remaining) {
         return allowed[_owner][_spender];
+    }
+
+    function _isContract(address _addr) internal constant returns (bool) {
+        uint256 length;
+        assembly {
+            length := extcodesize(_addr)
+        }
+        return (length > 0);
+    }
+
+    function _bytesToSignature(bytes sig) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := and(mload(add(sig, 65)), 255)
+        }
+        return (v, r, s);
+    }
+
+    bytes32 transferAndCallDelegatedHash = keccak256("address contract", "string method", "address to", "uint256 value", "bytes data", "uint256 maxReward", "uint256 nonce");
+    function transferAndCallDelegatedRecover(
+        address _to,
+        uint256 _value,
+        bytes _data,
+        uint256 _maxReward,
+        uint256 _nonce,
+        bytes _signature
+    ) public constant returns (address) {
+        bytes32 hash = keccak256(transferAndCallDelegatedHash, keccak256(this, "transferAndCallDelegated", _to, _value, _data, _maxReward, _nonce));
+        var (v, r, s) = _bytesToSignature(_signature);
+        return ecrecover(hash, v, r, s);
+    }
+
+    function transferAndCallDelegated(
+        address _from,
+        address _to,
+        uint256 _value,
+        bytes _data,
+        uint256 _maxReward,
+        uint256 _claimedReward,
+        uint256 _nonce,
+        bytes _signature
+    ) public returns (bool success) {
+        require(_claimedReward <= _maxReward);
+        require(!usedNonce[_from][_nonce]);
+        require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
+        usedNonce[_from][_nonce] = true;
+        require(_transfer(_from, _to, _value));
+        require(_transfer(_from, msg.sender, _claimedReward));
+        if (_isContract(_to)) {
+            TransferAndCallReceiver(_to).tokenCallback(_from, _value, _data);
+        }
+        return true;
     }
 
     function burn(uint256 _value) public {
