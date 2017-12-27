@@ -35,7 +35,6 @@ contract LikeCoin is ERC20 {
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
-    uint256 public airdropLimit = 0;
     mapping (address => bool) isUserGrowthPool;
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
@@ -44,11 +43,10 @@ contract LikeCoin is ERC20 {
 
     event Lock(address indexed _addr, uint256 _value);
 
-    function LikeCoin(uint256 _initialSupply, uint256 _airdropLimit) public {
+    function LikeCoin(uint256 _initialSupply) public {
         owner = msg.sender;
         supply = _initialSupply;
-        balances[this] = _initialSupply;
-        airdropLimit = _airdropLimit;
+        balances[owner] = _initialSupply;
     }
 
     function totalSupply() public constant returns (uint256) {
@@ -99,14 +97,39 @@ contract LikeCoin is ERC20 {
         return true;
     }
 
-    function approve(address _spender, uint256 _value) public returns (bool success) {
-        allowed[msg.sender][_spender] = _value;
-        Approval(msg.sender, _spender, _value);
-        return true;
+    function transferMultiple(address[] _addrs, uint256 _value) public {
+        require(_addrs.length > 0);
+        _moveLockedBalance(msg.sender);
+        uint256 total = _addrs.length * _value;
+        require(total / _addrs.length == _value);
+        require(balances[msg.sender] >= total);
+        for (uint i = 0; i < _addrs.length; ++i) {
+            address addr = _addrs[i];
+            require(balances[addr] + _value >= balances[addr]);
+            balances[addr] += _value;
+            Transfer(msg.sender, addr, _value);
+        }
+        balances[msg.sender] -= total;
     }
 
-    function allowance(address _owner, address _spender) public constant returns (uint256 remaining) {
-        return allowed[_owner][_spender];
+    function transferMultipleValues(address[] _addrs, uint256[] _values) public {
+        require(_addrs.length > 0);
+        require(_values.length == _addrs.length);
+        _moveLockedBalance(msg.sender);
+        uint256 total = 0;
+        for (uint i = 0; i < _addrs.length; ++i) {
+            address addr = _addrs[i];
+            uint256 value = _values[i];
+            uint256 balance = balances[addr];
+            require(balance + value >= balance);
+            require(total + value >= total);
+            balance += value;
+            total += value;
+            balances[addr] = balance;
+            Transfer(msg.sender, addr, value);
+        }
+        require(balances[msg.sender] >= total);
+        balances[msg.sender] -= total;
     }
 
     function _isContract(address _addr) internal constant returns (bool) {
@@ -162,26 +185,22 @@ contract LikeCoin is ERC20 {
         return true;
     }
 
+    function approve(address _spender, uint256 _value) public returns (bool success) {
+        allowed[msg.sender][_spender] = _value;
+        Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    function allowance(address _owner, address _spender) public constant returns (uint256 remaining) {
+        return allowed[_owner][_spender];
+    }
+
     function burn(uint256 _value) public {
         require(supply >= _value);
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
         supply -= _value;
         Transfer(msg.sender, 0x0, _value);
-    }
-
-    function airdrop(address[] _addrs, uint256 _value) public {
-        require(msg.sender == owner);
-        require(_addrs.length > 0);
-        require(0 < _value && _value <= airdropLimit);
-        uint256 total = _addrs.length * _value;
-        require(total / _addrs.length == _value);
-        require(balances[this] >= total);
-        for (uint i = 0; i < _addrs.length; ++i) {
-            balances[_addrs[i]] += _value;
-            Transfer(this, _addrs[i], _value);
-        }
-        balances[this] -= total;
     }
 
     function registerCrowdsales(address _crowdsaleAddr, uint256 _value, uint256 _privateFundUnlockTime) public {

@@ -25,133 +25,118 @@ const LikeCoin = artifacts.require("./LikeCoin.sol");
 
 contract("LikeCoin", (accounts) => {
     const initialAmount = coinsToCoinUnits(10000);
-    const airdropLimit = initialAmount.div(10);
+    const airdropMax = initialAmount.div(10);
     let like;
 
     before(async () => {
-        like = await LikeCoin.new(initialAmount, airdropLimit);
+        like = await LikeCoin.new(initialAmount);
     });
 
     it(`should deploy LikeCoin contract correctly`, async () => {
         assert((await like.totalSupply()).eq(initialAmount), "Wrong initial supply");
-        assert((await like.balanceOf(like.address)).eq(initialAmount), "Wrong balance");
-        assert((await like.airdropLimit()).eq(airdropLimit), "Wrong airdropLimit");
+        assert((await like.balanceOf(accounts[0])).eq(initialAmount), "Wrong balance");
         assert.equal(await like.owner(), accounts[0], "Wrong owner");
     });
 
     it(`should airdrop coins into accounts`, async () => {
-        const balanceBefore = await like.balanceOf(like.address);
-        await like.airdrop([accounts[0], accounts[1], accounts[2]], airdropLimit);
-        assert((await like.balanceOf(accounts[0])).eq(airdropLimit), `accounts[0] owns wrong amount of coins after airdrop`);
-        assert((await like.balanceOf(accounts[1])).eq(airdropLimit), `accounts[1] owns wrong amount of coins after airdrop`);
-        assert((await like.balanceOf(accounts[2])).eq(airdropLimit), `accounts[2] owns wrong amount of coins after airdrop`);
-        assert((await like.balanceOf(like.address)).eq(balanceBefore.sub(airdropLimit.times(3))), `Wrong balance after airdrop`);
-    });
-
-    it(`should forbid non-owner to airdrop`, async () => {
-        await utils.assertSolidityThrow(async () => {
-            await like.airdrop([accounts[2]], airdropLimit, {from: accounts[1]});
-        }, "Airdroping from non-owner should be forbidden");
-    });
-
-    it(`should forbid airdroping coins more than limit`, async () => {
-        await utils.assertSolidityThrow(async () => {
-            await like.airdrop([accounts[2]], airdropLimit.add(1));
-        }, "Airdroping more than limit should be forbidden");
+        const balanceBefore = await like.balanceOf(accounts[0]);
+        await like.transferMultiple([accounts[1], accounts[2], accounts[3]], airdropMax, {from: accounts[0]});
+        assert((await like.balanceOf(accounts[1])).eq(airdropMax), `accounts[1] owns wrong amount of coins after airdrop`);
+        assert((await like.balanceOf(accounts[2])).eq(airdropMax), `accounts[2] owns wrong amount of coins after airdrop`);
+        assert((await like.balanceOf(accounts[3])).eq(airdropMax), `accounts[3] owns wrong amount of coins after airdrop`);
+        assert((await like.balanceOf(accounts[0])).eq(balanceBefore.sub(airdropMax.times(3))), `Wrong balance after airdrop`);
     });
 
     it(`should forbid airdroping coins more than remaining`, async () => {
-        const remaining = await like.balanceOf(like.address);
+        const remaining = await like.balanceOf(accounts[0]);
         const airdropAmount = remaining.div(8).floor().add(1);
-        assert(airdropAmount.lt(airdropLimit), "Airdrop amount is greater than airdrop limit, please check test case");
         assert(airdropAmount.times(8).gt(remaining), "Total airdrop amount is less than remaining, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await like.airdrop([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount);
+            await like.transferMultiple([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount, {from: accounts[0]});
         }, "Airdroping more than remaining should be forbidden");
     });
 
     it(`should allow airdroping exactly all the remaining LIKE`, async () => {
-        const remaining = await like.balanceOf(like.address);
+        const remaining = await like.balanceOf(accounts[0]);
         const airdropAmount = remaining.div(8).floor();
-        assert(airdropAmount.lt(airdropLimit), "Airdrop amount is greater than airdrop limit, please check test case");
         assert(airdropAmount.times(8).eq(remaining), "Total airdrop amount does not equal to remaining, please check test case");
-        await like.airdrop([accounts[0], accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7]], airdropAmount);
-        assert((await like.balanceOf(like.address)).eq(0), "Still have some LIKE remaining, please check test case");
+        await like.transferMultiple([accounts[1], accounts[2], accounts[3], accounts[4], accounts[5], accounts[6], accounts[7], accounts[8]], airdropAmount, {from: accounts[0]});
+        assert((await like.balanceOf(accounts[0])).eq(0), "Still have some LIKE remaining, please check test case");
     });
 
     const transferAmount = 314;
-    it(`should transfer ${transferAmount} units of coins from accounts[0] to accounts[1]`, async () => {
-        const startingBalance0 = (await like.balanceOf(accounts[0]));
+    it(`should transfer ${transferAmount} units of coins from accounts[1] to accounts[2]`, async () => {
         const startingBalance1 = (await like.balanceOf(accounts[1]));
-        await like.transfer(accounts[1], transferAmount, {from: accounts[0]});
-        const endingBalance0 = (await like.balanceOf(accounts[0]));
+        const startingBalance2 = (await like.balanceOf(accounts[2]));
+        await like.transfer(accounts[2], transferAmount, {from: accounts[1]});
         const endingBalance1 = (await like.balanceOf(accounts[1]));
-        assert(endingBalance0.eq(startingBalance0.sub(transferAmount)), "Sender's balance wasn't correctly changed");
-        assert(endingBalance1.eq(startingBalance1.add(transferAmount)), "Receiver's balance wasn't correctly changed");
+        const endingBalance2 = (await like.balanceOf(accounts[2]));
+        assert(endingBalance1.eq(startingBalance1.sub(transferAmount)), "Sender's balance wasn't correctly changed");
+        assert(endingBalance2.eq(startingBalance2.add(transferAmount)), "Receiver's balance wasn't correctly changed");
     });
 
-    it("should forbid accounts[0] to transfer more coins than it owned", async () => {
-        const balance0 = (await like.balanceOf(accounts[0]));
-        const balance2 = (await like.balanceOf(accounts[2]));
+    it("should forbid accounts[1] to transfer more coins than it owned", async () => {
+        const balance0 = (await like.balanceOf(accounts[1]));
+        const balance2 = (await like.balanceOf(accounts[3]));
         await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[1], balance0.add(1), {from: accounts[0]});
+            await like.transfer(accounts[2], balance0.add(1), {from: accounts[1]});
         }, "Sending more than owned should be forbidden");
         await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[1], balance2.add(1), {from: accounts[2]});
+            await like.transfer(accounts[2], balance2.add(1), {from: accounts[3]});
         }, "Sending more than owned should be forbidden");
     });
 
     const allowance = new BigNumber(10000);
-    it(`should allow accounts[1] to transfer at most ${allowance} units of coins from accounts[0] to accounts[2]`, async () => {
-        const startingBalance0 = (await like.balanceOf(accounts[0]));
+    it(`should allow accounts[2] to transfer at most ${allowance} units of coins from accounts[1] to accounts[3]`, async () => {
         const startingBalance1 = (await like.balanceOf(accounts[1]));
         const startingBalance2 = (await like.balanceOf(accounts[2]));
-        await like.approve(accounts[1], allowance, {from: accounts[0]});
-        const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1]));
-        assert(allowanceOf1On0.eq(allowance), "Allowance wasn't correctly set");
-        await like.transferFrom(accounts[0], accounts[2], transferAmount, {from: accounts[1]});
-        const endingBalance0 = (await like.balanceOf(accounts[0]));
+        const startingBalance3 = (await like.balanceOf(accounts[3]));
+        await like.approve(accounts[2], allowance, {from: accounts[1]});
+        const allowanceOf2On1 = (await like.allowance(accounts[1], accounts[2]));
+        assert(allowanceOf2On1.eq(allowance), "Allowance wasn't correctly set");
+        await like.transferFrom(accounts[1], accounts[3], transferAmount, {from: accounts[2]});
         const endingBalance1 = (await like.balanceOf(accounts[1]));
         const endingBalance2 = (await like.balanceOf(accounts[2]));
-        assert(endingBalance0.eq(startingBalance0.sub(transferAmount)), "Sender's balance wasn't correctly changed");
-        assert(endingBalance1.eq(startingBalance1), "Caller's balance should not be changed");
-        assert(endingBalance2.eq(startingBalance2.add(transferAmount)), "Receiver's balance wasn't correctly changed");
-        const allowanceOf1On0After = (await like.allowance(accounts[0], accounts[1]));
-        assert(allowanceOf1On0After.eq(allowance.sub(transferAmount)), "Allowance wasn't correctly changed");
+        const endingBalance3 = (await like.balanceOf(accounts[3]));
+        assert(endingBalance1.eq(startingBalance1.sub(transferAmount)), "Sender's balance wasn't correctly changed");
+        assert(endingBalance2.eq(startingBalance2), "Caller's balance should not be changed");
+        assert(endingBalance3.eq(startingBalance3.add(transferAmount)), "Receiver's balance wasn't correctly changed");
+        const allowanceOf2On1After = (await like.allowance(accounts[1], accounts[2]));
+        assert(allowanceOf2On1After.eq(allowance.sub(transferAmount)), "Allowance wasn't correctly changed");
     });
 
     it("should forbid unapproved transferFrom", async () => {
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[2], accounts[0], 1, {from: accounts[1]});
+            await like.transferFrom(accounts[3], accounts[1], 1, {from: accounts[2]});
         }, "transferFrom with invalid owner should be forbidden");
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[0], accounts[2], 1, {from: accounts[2]});
+            await like.transferFrom(accounts[1], accounts[3], 1, {from: accounts[3]});
         }, "transferFrom with invalid spender should be forbidden");
     });
 
     it("should forbid transferFrom more than allowance value", async () => {
-        const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1]));
+        const allowanceOf2On1 = (await like.allowance(accounts[1], accounts[2]));
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0.add(1), {from: accounts[1]});
+            await like.transferFrom(accounts[1], accounts[3], allowanceOf2On1.add(1), {from: accounts[2]});
         }, "transferFrom exceeding allowance should be forbidden");
     });
 
     it("should allow transfer all allowance in once", async () => {
-        const allowanceOf1On0 = await like.allowance(accounts[0], accounts[1]);
-        const startingBalance0 = (await like.balanceOf(accounts[0]));
+        const allowanceOf2On1 = await like.allowance(accounts[1], accounts[2]);
         const startingBalance1 = (await like.balanceOf(accounts[1]));
         const startingBalance2 = (await like.balanceOf(accounts[2]));
-        await like.transferFrom(accounts[0], accounts[2], allowanceOf1On0, {from: accounts[1]});
-        const endingBalance0 = (await like.balanceOf(accounts[0]));
+        const startingBalance3 = (await like.balanceOf(accounts[3]));
+        await like.transferFrom(accounts[1], accounts[3], allowanceOf2On1, {from: accounts[2]});
         const endingBalance1 = (await like.balanceOf(accounts[1]));
         const endingBalance2 = (await like.balanceOf(accounts[2]));
-        assert(endingBalance0.eq(startingBalance0.sub(allowanceOf1On0)), "Sender's balance wasn't correctly changed");
-        assert(endingBalance1.eq(startingBalance1), "Caller's balance should not be changed");
-        assert(endingBalance2.eq(startingBalance2.add(allowanceOf1On0)), "Receiver's balance wasn't correctly changed");
-        const allowanceOf1On0After = (await like.allowance(accounts[0], accounts[1]));
-        assert(allowanceOf1On0After.eq(0), "Allowance wasn't correctly changed");
+        const endingBalance3 = (await like.balanceOf(accounts[3]));
+        assert(endingBalance1.eq(startingBalance1.sub(allowanceOf2On1)), "Sender's balance wasn't correctly changed");
+        assert(endingBalance2.eq(startingBalance2), "Caller's balance should not be changed");
+        assert(endingBalance3.eq(startingBalance3.add(allowanceOf2On1)), "Receiver's balance wasn't correctly changed");
+        const allowanceOf2On1After = (await like.allowance(accounts[1], accounts[2]));
+        assert(allowanceOf2On1After.eq(0), "Allowance wasn't correctly changed");
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[0], accounts[2], 1, {from: accounts[1]});
+            await like.transferFrom(accounts[1], accounts[3], 1, {from: accounts[2]});
         }, "Allowance should be all consumed already");
     });
 
@@ -160,79 +145,78 @@ contract("LikeCoin", (accounts) => {
     });
 
     it("should allow transfer all balance", async () => {
-        const balance0Before = await like.balanceOf(accounts[0]);
         const balance1Before = await like.balanceOf(accounts[1]);
-        await like.transfer(accounts[1], balance0Before, {from: accounts[0]});
-        assert((await like.balanceOf(accounts[0])).eq(0), "Sender should not have balance remaining");
-        assert((await like.balanceOf(accounts[1])).eq(balance0Before.add(balance1Before)), "Receiver's balance wasn't correctly changed");
+        const balance2Before = await like.balanceOf(accounts[2]);
+        await like.transfer(accounts[2], balance1Before, {from: accounts[1]});
+        assert((await like.balanceOf(accounts[1])).eq(0), "Sender should not have balance remaining");
+        assert((await like.balanceOf(accounts[2])).eq(balance1Before.add(balance2Before)), "Receiver's balance wasn't correctly changed");
     });
 
     it("should reset allowance correctly", async () => {
-        const balance0Before = await like.balanceOf(accounts[0]);
-        const balance2Before = await like.balanceOf(accounts[2]);
-        await like.approve(accounts[1], 2000, {from: accounts[2]});
-        await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
-        await like.approve(accounts[1], 1, {from: accounts[2]});
-        assert((await like.allowance(accounts[2], accounts[1])).eq(1), "Allowance is not correctly reset to 1 unit");
+        const balance1Before = await like.balanceOf(accounts[1]);
+        const balance3Before = await like.balanceOf(accounts[3]);
+        await like.approve(accounts[2], 2000, {from: accounts[3]});
+        await like.transferFrom(accounts[3], accounts[1], 1000, {from: accounts[2]});
+        await like.approve(accounts[2], 1, {from: accounts[3]});
+        assert((await like.allowance(accounts[3], accounts[2])).eq(1), "Allowance is not correctly reset to 1 unit");
         await utils.assertSolidityThrow(async () => {
-            await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
+            await like.transferFrom(accounts[3], accounts[1], 1000, {from: accounts[2]});
         }, "transferFrom should fail after resetting allowance to lower than the call value");
-        await like.transferFrom(accounts[2], accounts[0], 1, {from: accounts[1]});
-        assert((await like.allowance(accounts[2], accounts[1])).eq(0), "Allowance is not correctly decreased to 0 unit");
-        await like.approve(accounts[1], 1000, {from: accounts[2]});
-        assert((await like.allowance(accounts[2], accounts[1])).eq(1000), "Allowance is not correctly reset to 1000 units");
-        await like.transferFrom(accounts[2], accounts[0], 1000, {from: accounts[1]});
-        assert((await like.balanceOf(accounts[0])).eq(balance0Before.add(2001)), "Receiver's balance wasn't correctly changed");
-        assert((await like.balanceOf(accounts[2])).eq(balance2Before.sub(2001)), "Sender's balance wasn't correctly changed");
+        await like.transferFrom(accounts[3], accounts[1], 1, {from: accounts[2]});
+        assert((await like.allowance(accounts[3], accounts[2])).eq(0), "Allowance is not correctly decreased to 0 unit");
+        await like.approve(accounts[2], 1000, {from: accounts[3]});
+        assert((await like.allowance(accounts[3], accounts[2])).eq(1000), "Allowance is not correctly reset to 1000 units");
+        await like.transferFrom(accounts[3], accounts[1], 1000, {from: accounts[2]});
+        assert((await like.balanceOf(accounts[1])).eq(balance1Before.add(2001)), "Receiver's balance wasn't correctly changed");
+        assert((await like.balanceOf(accounts[3])).eq(balance3Before.sub(2001)), "Sender's balance wasn't correctly changed");
     });
 
     it("should maintain the total supply unchanged", async () => {
         assert((await like.totalSupply()).eq(initialAmount), "Total supply should not change");
-        assert((await like.airdropLimit()).eq(airdropLimit), "Airdrop limit should not change");
     });
 
     it("should burn correct amount of coins", async () => {
         const supplyBefore = await like.totalSupply();
-        const balance0Before = await like.balanceOf(accounts[0]);
-        const toBurn = balance0Before.div(2).floor();
-        assert(!balance0Before.eq(0), "Banalce in accounts[0] is 0 before buring, please check test case");
+        const balance1Before = await like.balanceOf(accounts[1]);
+        const toBurn = balance1Before.div(2).floor();
+        assert(!balance1Before.eq(0), "Banalce in accounts[1] is 0 before buring, please check test case");
         assert(!toBurn.eq(0), "Burning amount is 0, please check test case");
-        await like.burn(toBurn);
-        assert((await like.balanceOf(accounts[0])).eq(balance0Before.sub(toBurn)), "Wrong amount of coins remaining after burning");
+        await like.burn(toBurn, {from: accounts[1]});
+        assert((await like.balanceOf(accounts[1])).eq(balance1Before.sub(toBurn)), "Wrong amount of coins remaining after burning");
         assert((await like.totalSupply()).eq(supplyBefore.sub(toBurn)), "Wrong amount of supply remaining after burning");
     });
 
     it("should transfer and lock correctly", async () => {
         const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
-        await like.registerCrowdsales(accounts[1], 1, unlockTime);
-        const balance0Before = await like.balanceOf(accounts[0]);
-        const balance1 = await like.balanceOf(accounts[1]);
-        assert(!balance0Before.eq(0), "Banalce in accounts[0] is 0, please check test case");
-        assert(!balance1.eq(0), "Banalce in accounts[1] is 0, please check test case");
+        await like.registerCrowdsales(accounts[2], 1, unlockTime);
+        const balance1Before = await like.balanceOf(accounts[1]);
+        const balance2 = await like.balanceOf(accounts[2]);
+        assert(!balance1Before.eq(0), "Banalce in accounts[1] is 0, please check test case");
+        assert(!balance2.eq(0), "Banalce in accounts[2] is 0, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await like.transferAndLock(accounts[1], 1, {from: accounts[0]});
+            await like.transferAndLock(accounts[2], 1, {from: accounts[1]});
         }, "Only crowdsale address can call transferAndLock");
-        await like.transferAndLock(accounts[0], balance1, {from: accounts[1]});
-        assert((await like.balanceOf(accounts[0])).eq(balance0Before.add(balance1)), "Wrong amount of coins in accounts[0] after transferAndLock");
-        assert((await like.balanceOf(accounts[1])).eq(0), "Wrong amount of coins in accounts[1] after transferAndLock");
+        await like.transferAndLock(accounts[1], balance2, {from: accounts[2]});
+        assert((await like.balanceOf(accounts[1])).eq(balance1Before.add(balance2)), "Wrong amount of coins in accounts[1] after transferAndLock");
+        assert((await like.balanceOf(accounts[2])).eq(0), "Wrong amount of coins in accounts[2] after transferAndLock");
         await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
+            await like.transfer(accounts[2], balance1Before.add(1), {from: accounts[1]});
         }, "Should not be able to transfer locked part in balance before unlockTime");
-        await like.transfer(accounts[1], balance0Before, {from: accounts[0]});
-        assert((await like.balanceOf(accounts[0])).eq(balance1), "Wrong amount of coins in accounts[0] after transferAndLock");
-        assert((await like.balanceOf(accounts[1])).eq(balance0Before), "Wrong amount of coins in accounts[1] after transferAndLock");
-        await like.transfer(accounts[0], balance0Before, {from: accounts[1]});
-        assert((await like.balanceOf(accounts[0])).eq(balance0Before.add(balance1)), "Wrong amount of coins in accounts[0] after transferAndLock");
-        assert((await like.balanceOf(accounts[1])).eq(0), "Wrong amount of coins in accounts[1] after transferAndLock");
+        await like.transfer(accounts[2], balance1Before, {from: accounts[1]});
+        assert((await like.balanceOf(accounts[1])).eq(balance2), "Wrong amount of coins in accounts[1] after transferAndLock");
+        assert((await like.balanceOf(accounts[2])).eq(balance1Before), "Wrong amount of coins in accounts[2] after transferAndLock");
+        await like.transfer(accounts[1], balance1Before, {from: accounts[2]});
+        assert((await like.balanceOf(accounts[1])).eq(balance1Before.add(balance2)), "Wrong amount of coins in accounts[1] after transferAndLock");
+        assert((await like.balanceOf(accounts[2])).eq(0), "Wrong amount of coins in accounts[2] after transferAndLock");
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(unlockTime + 1 - now);
-        await like.transfer(accounts[1], balance0Before.add(1), {from: accounts[0]});
-        assert((await like.balanceOf(accounts[0])).eq(balance1.sub(1)), "Wrong balance on accounts[0] after unlock");
-        assert((await like.balanceOf(accounts[1])).eq(balance0Before.add(1)), "Wrong balance on accounts[1] after unlock");
+        await like.transfer(accounts[2], balance1Before.add(1), {from: accounts[1]});
+        assert((await like.balanceOf(accounts[1])).eq(balance2.sub(1)), "Wrong balance on accounts[1] after unlock");
+        assert((await like.balanceOf(accounts[2])).eq(balance1Before.add(1)), "Wrong balance on accounts[2] after unlock");
 
-        assert(!(await like.balanceOf(accounts[0])).eq(0), "accounts[0] has no balance left for transferAndLock, please check test case");
+        assert(!(await like.balanceOf(accounts[1])).eq(0), "accounts[1] has no balance left for transferAndLock, please check test case");
         await utils.assertSolidityThrow(async () => {
-            await like.transferAndLock(accounts[1], 1, {from: accounts[0]});
+            await like.transferAndLock(accounts[2], 1, {from: accounts[1]});
         }, "Should not be able to transferAndLock after unlockTime");
     });
 });
@@ -242,18 +226,18 @@ contract("LikeCoinEvents", (accounts) => {
     let like;
 
     before(async () => {
-        like = await LikeCoin.new(initialAmount, initialAmount);
+        like = await LikeCoin.new(initialAmount);
     });
 
     it("should emit Transfer event after transaction", async () => {
-        const callResult = await like.airdrop([accounts[0], accounts[1], accounts[2]], 10000);
+        const callResult = await like.transferMultiple([accounts[0], accounts[1], accounts[2]], 10000, {from: accounts[0]});
         const logs = callResult.logs.filter((log) => log.event === "Transfer");
         assert.equal(logs.length, 3,  "Wrong number of Transfer events");
         for (let i = 0; i < 2; ++i) {
             const events = logs.filter((log) => log.args._to === accounts[i]);
             assert.equal(events.length, 1, `Wrong number of Transfer events for accounts[${i}]`);
             const event = events[0];
-            assert.equal(event.args._from, like.address, "Transfer event has wrong value on field '_from'");
+            assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
             assert(event.args._value.eq(10000), "Transfer event has wrong value on field '_value'");
         }
     });

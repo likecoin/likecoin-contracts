@@ -43,7 +43,7 @@ contract("ContributorPool:give", (accounts) => {
     let airDropAmount = new BigNumber(0);
 
     before(async() => {
-        like = await LikeCoin.new(contributorAmount, contributorAmount);
+        like = await LikeCoin.new(contributorAmount);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -167,7 +167,7 @@ contract("ContributorPool:give", (accounts) => {
         }, "Should not allow not enough confirm");
         await cp.confirmProposal(proposalId, {from: accounts[3]});
         await cp.executeProposal(proposalId, {from: accounts[5]});
-        await like.airdrop([cp.address], amount, {from: accounts[0]});
+        await like.transfer(cp.address, amount, {from: accounts[0]});
         airDropAmount = airDropAmount.add(1);
     });
 
@@ -238,10 +238,10 @@ contract("ContributorPool:give", (accounts) => {
         }, "Should not allow to execute, give coins more than remaining available number");
         
         // add additional likecoin so that is enough for execution.
-        await like.airdrop([cp.address], 1, {from: accounts[0]});
+        await like.transfer(cp.address, 1, {from: accounts[0]});
         await cp.executeProposal(proposalId, {from: accounts[5]});
         // add back likecoin so that remaining likecoin is same as the state before this testcase
-        await like.airdrop([cp.address], remainAmount, {from: accounts[0]});
+        await like.transfer(cp.address, remainAmount, {from: accounts[0]});
         airDropAmount = airDropAmount.add(remainAmount).add(1);
     });
 
@@ -330,7 +330,7 @@ contract("ContributorPool:give2", (accounts) => {
     let unlockTimestamp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -407,7 +407,7 @@ contract("ContributorPool:give3", (accounts) => {
     const notExistId = [20, 21, 22];
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -488,7 +488,7 @@ contract("ContributorPool:setowners", (accounts) => {
     let unlockTimestamp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -612,7 +612,7 @@ contract("ContributorPool:setowners2", (accounts) => {
     let cp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
     });
 
     it("test parms on deploying contributor pool 1", async () => {
@@ -669,7 +669,7 @@ contract("ContributorPool:setowners3", (accounts) => {
     let cp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
     });
 
     it("normal deployment constructor", async () => {
@@ -740,7 +740,7 @@ contract("ContributorPool:give4", (accounts) => {
     let cp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -800,7 +800,7 @@ contract("ContributorPool:give5", (accounts) => {
     let unlockTimestamp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 
@@ -887,7 +887,7 @@ contract("ContributorEvent", (accounts) => {
     let cp;
 
     before(async() => {
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
     });
 

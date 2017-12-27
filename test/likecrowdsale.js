@@ -64,7 +64,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         start = now + 1000;
         end = start + crowdsaleLength;
         unlockTime = end + 10000;
-        like = await LikeCoin.new(initialSupply, 0);
+        like = await LikeCoin.new(initialSupply);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
     });
 
@@ -379,7 +379,7 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         start = now + 1000;
         end = start + crowdsaleLength;
         unlockTime = now + 0xFFFFFFFF;
-        like = await LikeCoin.new(0, 0);
+        like = await LikeCoin.new(0);
         crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
         await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
         await crowdsale.addPrivateFund(accounts[1], privateFunds[1]);
@@ -442,7 +442,7 @@ contract("LikeCoin Crowdsale Overflow", () => {
         await utils.testrpcIncreaseTime(1);
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         const hardCap = new BigNumber(2).pow(256).sub(1);
-        const like = await LikeCoin.new(1, 0);
+        const like = await LikeCoin.new(1);
         const crowdsale = await LikeCrowdsale.new(like.address, now + 100, now + 200, 1, hardCap, referrerBonusPercent);
         await utils.assertSolidityThrow(async () => {
             await like.registerCrowdsales(crowdsale.address, hardCap, now + 300);
