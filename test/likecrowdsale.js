@@ -153,7 +153,9 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should forbid adding private fund from accounts[1]");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
-        await crowdsale.acceptOwnership({from: accounts[1]});
+        const callResult = await crowdsale.acceptOwnership({from: accounts[1]});
+        const ownershipChangedEvent = utils.solidityEvent(callResult, "OwnershipChanged");
+        assert.equal(ownershipChangedEvent.args._newOwner, accounts[1], "OwnershipChanged event has wrong value on field '_newOwner'");
         await utils.assertSolidityThrow(async () => {
             await crowdsale.addPrivateFund(accounts[7], remaining, {from: accounts[0]});
         }, "should forbid adding private fund from old owner accounts[0]");
@@ -202,6 +204,35 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should lock private fund until unlock time");
     });
 
+    it("should forbid non-owner to call transferLike", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.transferLike(accounts[0], 1, {from: accounts[1]});
+        }, "Calling transferLike from non-owner should be forbidden");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.transferLike(accounts[0], 1, {from: accounts[0]});
+        }, "Calling transferLike from old owner should be forbidden");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
+    });
+
+    it("should be able to transfer LIKE before crowdsale starts", async () => {
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        assert.isBelow(now, start, "Blocktime is already after crowdsale start, please adjust test case");
+        const balanceBefore = await like.balanceOf(accounts[8]);
+        const remainingBefore = await like.balanceOf(crowdsale.address);
+        const callResult = await crowdsale.transferLike(accounts[8], 100000, {from: accounts[0]});
+        const likeTransferEvent = utils.solidityEvent(callResult, "LikeTransfer");
+        assert.equal(likeTransferEvent.args._to, accounts[8], "LikeTransfer event has wrong value on field '_to'");
+        assert(likeTransferEvent.args._value.eq(100000), "LikeTransfer event has wrong value on field '_value'");
+        assert((await like.balanceOf(accounts[8])).eq(balanceBefore.add(100000)), "Value of Transferred balance is wrong");
+        assert((await like.balanceOf(crowdsale.address)).eq(remainingBefore.sub(100000)), "Remaining balance is wrong");
+    });
+
     it("should forbid buying coins before crowdsale starts", async () => {
         const event = utils.solidityEvent(await crowdsale.registerKYC([accounts[1]]), "RegisterKYC");
         assert.equal(event.args._addr, accounts[1], "RegisterKYC event has wrong value on field '_addr'");
@@ -212,9 +243,16 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "Buying coins before crowdsale starts should be forbidden");
     });
 
-    it("should forbid buying coins before KYC", async () => {
+    it("should forbid transfer LIKE after crowdsale starts and before crowdsale ends", async () => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        assert.isBelow(now, start, "Blocktime is already after crowdsale start, please adjust test case");
         await utils.testrpcIncreaseTime(start + 1 - now);
+        await utils.assertSolidityThrow(async() => {
+            await crowdsale.transferLike(accounts[8], 1, {from: accounts[0]});
+        }, "should forbid transfer LIKE after crowdsale starts and before crowdsale ends");
+    });
+
+    it("should forbid buying coins before KYC", async () => {
         await utils.assertSolidityThrow(async() => {
             await web3.eth.sendTransaction({from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000"});
         }, "Buying coins before KYC should be forbidden");
@@ -362,6 +400,17 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
+    it("should be able to transfer LIKE after crowdsale ends", async () => {
+        const balanceBefore = await like.balanceOf(accounts[8]);
+        const remainingBefore = await like.balanceOf(crowdsale.address);
+        const callResult = await crowdsale.transferLike(accounts[8], 1, {from: accounts[0]});
+        const likeTransferEvent = utils.solidityEvent(callResult, "LikeTransfer");
+        assert.equal(likeTransferEvent.args._to, accounts[8], "LikeTransfer event has wrong value on field '_to'");
+        assert(likeTransferEvent.args._value.eq(1), "LikeTransfer event has wrong value on field '_value'");
+        assert((await like.balanceOf(accounts[8])).eq(balanceBefore.add(1)), "Value of Transferred balance is wrong");
+        assert((await like.balanceOf(crowdsale.address)).eq(remainingBefore.sub(1)), "Remaining balance is wrong");
+    });
+
     it("should send ether to owner after finalization", async () => {
         const remaining = await like.balanceOf(crowdsale.address);
         assert(!remaining.eq(0), "Remaining coins is 0, please check test case");
@@ -392,10 +441,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         assert.isBelow(now, unlockTime, "Blocktime is already after unlock time, please adjust test case");
         await utils.assertSolidityThrow(async () => {
-            await like.transfer(accounts[7], 100, {from: accounts[5]});
+            await like.transfer(accounts[7], 101, {from: accounts[5]});
         }, "should lock private fund until unlock time");
         await utils.testrpcIncreaseTime(unlockTime + 1 - now);
-        await like.transfer(accounts[7], 100, {from: accounts[5]});
+        await like.transfer(accounts[7], 101, {from: accounts[5]});
     });
 });
 
@@ -414,6 +463,8 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         2: buyCoins[2].div(coinsPerEth), // 4,200 Ether
     };
 
+    const oldCoinsPerEth = 10000;
+
     let unlockTime;
     let start;
     let end;
@@ -424,18 +475,43 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         // The blocktime of next block could be affected by snapshot and revert, so mine the next block immediately by
         // calling testrpcIncreaseTime
         await utils.testrpcIncreaseTime(1);
-        let now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         start = now + 1000;
         end = start + crowdsaleLength;
         unlockTime = now + 0xFFFFFFFF;
         like = await LikeCoin.new(0);
-        crowdsale = await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
+        crowdsale = await LikeCrowdsale.new(like.address, start, end, oldCoinsPerEth, hardCap, referrerBonusPercent);
         await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
         await crowdsale.addPrivateFund(accounts[1], privateFunds[1]);
-        now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    });
+
+    it("should change price", async () => {
+        const callResult = await crowdsale.changePrice(coinsPerEth, {from: accounts[0]});
+        const priceChangedEvent = utils.solidityEvent(callResult, "PriceChanged");
+        assert(priceChangedEvent.args._newPrice.eq(coinsPerEth), "PriceChanged event has wrong value on field '_newPrice'");
+
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.changePrice(coinsPerEth, {from: accounts[1]});
+        }, "Should not allow non-owner to change price");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.changePrice(coinsPerEth, {from: accounts[0]});
+        }, "Should not allow old owner to change price");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
+
+        const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
         await utils.testrpcIncreaseTime(start + 1 - now);
         await crowdsale.registerKYC([accounts[1], accounts[2]]);
         await web3.eth.sendTransaction({from: accounts[1], to: crowdsale.address, value: buyWeis[1], gas: "200000"});
+
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.changePrice(coinsPerEth, {from: accounts[0]});
+        }, "Should not allow changing price after crowdsale start");
     });
 
     it("should forbid adding private fund after crowdsale started", async () => {
