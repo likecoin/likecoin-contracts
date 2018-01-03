@@ -21,6 +21,7 @@ import "./LikeCoin.sol";
 
 contract LikeCrowdsale {
     address public owner = 0x0;
+    address public newOwner = 0x0;
     LikeCoin public like = LikeCoin(0x0);
     uint public start = 0;
     uint public end = 0;
@@ -34,6 +35,7 @@ contract LikeCrowdsale {
     bool privateFundFinalized = false;
     bool finalized = false;
 
+    event OwnershipChanged(address _newOwner);
     event AddPrivateFund(address indexed _addr, uint256 _value);
     event FinalizePrivateFund();
     event RegisterKYC(address indexed _addr);
@@ -53,6 +55,18 @@ contract LikeCrowdsale {
         coinsPerEth = _coinsPerEth;
         hardCap = _hardCap;
         referrerBonusPercent = _referrerBonusPercent;
+    }
+
+    function changeOwner(address _newOwner) public {
+        require(msg.sender == owner);
+        newOwner = _newOwner;
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == newOwner);
+        owner = newOwner;
+        newOwner = 0x0;
+        OwnershipChanged(owner);
     }
 
     function isPrivateFundFinalized() public constant returns (bool) {

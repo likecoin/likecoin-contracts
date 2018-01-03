@@ -32,6 +32,7 @@ contract LikeCoin is ERC20 {
     mapping(address => mapping(address => uint256)) public allowed;
 
     address public owner = 0x0;
+    address public newOwner = 0x0;
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
@@ -39,14 +40,28 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
+    bool public allowDelegate = true;
     mapping (address => mapping (uint256 => bool)) public usedNonce;
 
     event Lock(address indexed _addr, uint256 _value);
+    event OwnershipChanged(address _newOwner);
 
     function LikeCoin(uint256 _initialSupply) public {
         owner = msg.sender;
         supply = _initialSupply;
         balances[owner] = _initialSupply;
+    }
+
+    function changeOwner(address _newOwner) public {
+        require(msg.sender == owner);
+        newOwner = _newOwner;
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == newOwner);
+        owner = newOwner;
+        newOwner = 0x0;
+        OwnershipChanged(owner);
     }
 
     function totalSupply() public constant returns (uint256) {
@@ -173,6 +188,7 @@ contract LikeCoin is ERC20 {
         uint256 _nonce,
         bytes _signature
     ) public returns (bool success) {
+        require(allowDelegate);
         require(_claimedReward <= _maxReward);
         require(!usedNonce[_from][_nonce]);
         require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
@@ -183,6 +199,11 @@ contract LikeCoin is ERC20 {
             TransferAndCallReceiver(_to).tokenCallback(_from, _value, _data);
         }
         return true;
+    }
+
+    function switchDelegate(bool _allowed) public {
+        require(msg.sender == owner);
+        allowDelegate = _allowed;
     }
 
     function approve(address _spender, uint256 _value) public returns (bool success) {

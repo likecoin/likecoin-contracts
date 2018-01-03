@@ -53,6 +53,16 @@ contract("ContributorPool:give", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.registerContributorPool(cp.address, contributorAmount, {from: accounts[1]});
         }, "ContributorPool contract should be registered by owner only");
+
+        await like.changeOwner(accounts[1], {from: accounts[0]});
+        await like.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await like.registerContributorPool(cp.address, contributorAmount, {from: accounts[0]});
+        }, "ContributorPool contract should not be registered by old owner");
+        // change back
+        await like.changeOwner(accounts[0], {from: accounts[1]});
+        await like.acceptOwnership({from: accounts[0]});
+
         // TEST_CONT_0002
         // register by owner (acct 0)
         await like.registerContributorPool(cp.address, contributorAmount, {from: accounts[0]});

@@ -117,7 +117,7 @@ contract("LikeCoin", (accounts) => {
         const claimedReward = maxReward.sub(1);
         const value = (await like.balanceOf(accounts[2])).sub(claimedReward);
         assert(value.gt(0), "accounts[2] does not have enough balance to transfer");
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        const nonce = 1;
         const privKey = Accounts[2].secretKey;
         const balance1Before = await like.balanceOf(accounts[1]);
         const balance2Before = await like.balanceOf(accounts[2]);
@@ -140,7 +140,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = maxReward.sub(1);
         const value = (await like.balanceOf(accounts[2])).sub(claimedReward).add(1);
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000002";
+        const nonce = 2;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -156,7 +156,7 @@ contract("LikeCoin", (accounts) => {
         const claimedReward = maxReward.add(1);
         assert(!(await like.balanceOf(from)).lt(claimedReward), "accounts[2] does not have enough balance to transfer");
         const value = 0;
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000003";
+        const nonce =3;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -171,7 +171,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = 0;
         const value = 0;
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000004";
+        const nonce = 4;
         const privKey = Accounts[2].secretKey;
 
         let signature = signTransferAndCallDelegated(accounts[1], to, value, data, maxReward, nonce, privKey);
@@ -199,7 +199,7 @@ contract("LikeCoin", (accounts) => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
         }, "should forbid transferring with different maxReward from signature");
 
-        signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, "0x0000000000000000000000000000000000000000000000000000000000000005", privKey);
+        signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, 5, privKey);
         await utils.assertSolidityThrow(async () => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
         }, "should forbid transferring with different nonce from signature");
@@ -225,7 +225,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = 0;
         const value = 0;
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        const nonce = 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -241,7 +241,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = 0;
         const claimedReward = 0;
         const value = 1;
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000006";
+        const nonce = 6;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
@@ -258,12 +258,56 @@ contract("LikeCoin", (accounts) => {
         const maxReward = 0;
         const claimedReward = 0;
         const value = 1;
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000007";
+        const nonce = 7;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
         }, "should forbid transferAndCall to contract without tokenCallback function");
+    });
+
+    it(`should allow owner to switch on and off transferDelegated`, async () => {
+        const from = accounts[2];
+        const to = accounts[3];
+        const data = "0x1234";
+        const maxReward = 0;
+        const claimedReward = 0;
+        const value = 1;
+        const nonce = 8;
+        const privKey = Accounts[2].secretKey;
+        const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+
+        await like.switchDelegate(false, {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
+        }, "should forbid transferAndCallDelegated after switching off delegate");
+
+        await like.switchDelegate(true, {from: accounts[0]});
+        await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
+
+        // transfer back
+        await like.transfer(accounts[2], value, {from: accounts[3]});
+
+        await like.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(true, {from: accounts[1]});
+        }, "should not be able to call switchDelegate before accept ownership");
+        await like.switchDelegate(true, {from: accounts[0]});
+        await like.switchDelegate(false, {from: accounts[0]});
+        await like.changeOwner(accounts[2], {from: accounts[0]});
+        await like.acceptOwnership({from: accounts[2]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(true, {from: accounts[0]});
+        }, "should not be able to call switchDelegate after change owner");
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(true, {from: accounts[1]});
+        }, "should not be able to call switchDelegate after change owner");
+        await like.switchDelegate(true, {from: accounts[2]});
+        await like.switchDelegate(false, {from: accounts[2]});
+
+        // change back
+        await like.changeOwner(accounts[0], {from: accounts[2]});
+        await like.acceptOwnership({from: accounts[0]});
     });
 
     it(`should transfer different values of LIKE into different accounts at once`, async () => {
@@ -588,5 +632,12 @@ contract("LikeCoinEvents", (accounts) => {
         const lockEvent = utils.solidityEvent(callResult, "Lock");
         assert.equal(lockEvent.args._addr, accounts[1], "Lock event has wrong value on field '_addr'");
         assert(lockEvent.args._value.eq(balance), "Lock event has wrong value on field '_value'");
+    });
+
+    it("should emit OwnershipChanged event after change owner", async () => {
+        await like.changeOwner(accounts[1], {from: accounts[0]});
+        const callResult = await like.acceptOwnership({from: accounts[1]});
+        const ownershipChangedEvent = utils.solidityEvent(callResult, "OwnershipChanged");
+        assert.equal(ownershipChangedEvent.args._newOwner, accounts[1], "OwnershipChanged event has wrong value on field '_newOwner'");
     });
 });

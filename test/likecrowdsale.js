@@ -82,6 +82,15 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, {from: accounts[1]});
         }, "should forbid accounts[1] to register crowdsale contract");
+
+        await like.changeOwner(accounts[1], {from: accounts[0]});
+        await like.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, {from: accounts[0]});
+        }, "should forbid accounts[0] to register crowdsale contract after changing owner");
+        // change bacck
+        await like.changeOwner(accounts[0], {from: accounts[1]});
+        await like.acceptOwnership({from: accounts[0]});
     });
 
     it(`should mint ${hardCap.toFixed()} units of coins`, async () => {
@@ -142,12 +151,32 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await crowdsale.addPrivateFund(accounts[7], remaining, {from: accounts[1]});
         }, "should forbid adding private fund from accounts[1]");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.addPrivateFund(accounts[7], remaining, {from: accounts[0]});
+        }, "should forbid adding private fund from old owner accounts[0]");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
     it("should forbid non-owner to finalize private fund", async () => {
         await utils.assertSolidityThrow(async () => {
             await crowdsale.finalizePrivateFund({from: accounts[1]});
         }, "should forbid finalizing private fund from accounts[1]");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.finalizePrivateFund({from: accounts[0]});
+        }, "should forbid finalizing private fund from old owner accounts[0]");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
     it("should forbid adding private fund after finalizing private fund", async () => {
@@ -280,6 +309,16 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await crowdsale.registerReferrer(accounts[1], accounts[9], {from: accounts[1]});
         }, "should forbid non-owner accounts[1] to set referrer");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.registerReferrer(accounts[1], accounts[9], {from: accounts[0]});
+        }, "should forbid old owner accounts[0] to set referrer");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
     it("should forbid buying 0 coins", async () => {
@@ -311,6 +350,16 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await crowdsale.finalize({from: accounts[1]});
         }, "Calling finalize from non-owner should be forbidden");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.finalize({from: accounts[0]});
+        }, "Calling finalize from old owner should be forbidden");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
     it("should send ether to owner after finalization", async () => {
