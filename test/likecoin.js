@@ -495,8 +495,12 @@ contract("LikeCoinEvents", (accounts) => {
     const initialAmount = coinsToCoinUnits(10000);
     let like;
 
-    before(async () => {
+    it("should emit Transfer event when deploy contract", async () => {
         like = await LikeCoin.new(initialAmount);
+        const transferEvent = await utils.solidityEventPromise(like.Transfer());
+        assert.equal(transferEvent.args._from, 0, "Transfer event has wrong value on field '_from'");
+        assert.equal(transferEvent.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+        assert(transferEvent.args._value.eq(initialAmount), "Transfer event has wrong value on field '_from'");
     });
 
     it("should emit Transfer event after transaction", async () => {

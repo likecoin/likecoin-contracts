@@ -50,6 +50,7 @@ contract LikeCoin is ERC20 {
         owner = msg.sender;
         supply = _initialSupply;
         balances[owner] = _initialSupply;
+        Transfer(0x0, owner, _initialSupply);
     }
 
     function changeOwner(address _newOwner) public {
