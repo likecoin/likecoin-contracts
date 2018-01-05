@@ -16,7 +16,7 @@
 //    along with LikeCoin Smart Contract.  If not, see <http://www.gnu.org/licenses/>.
 
 /* eslint-env mocha, node */
-/* global artifacts, contract, assert */
+/* global artifacts, contract, assert, web3 */
 
 const utils = require("./utils.js");
 const coinsToCoinUnits = utils.coinsToCoinUnits;
@@ -25,7 +25,6 @@ const LikeCoin = artifacts.require("./LikeCoin.sol");
 const ContributorPool = artifacts.require("./ContributorPool.sol");
 
 const lockTime = 2 * 86400 * 365; // 2 years
-const decimalFactor = new BigNumber(10).pow(18);
 
 const contributorAmount = coinsToCoinUnits(200000000);
 const testAmount = coinsToCoinUnits(10);
@@ -34,8 +33,6 @@ const testAmount = coinsToCoinUnits(10);
 contract("ContributorPool:give", (accounts) => {
     const owners = [1, 2, 3, 4, 5].map((i) => accounts[i]);
     const threshold = 3;
-    const newOwners = [5, 6, 7, 8].map((i) => accounts[i]);
-    const newThreshold = 2;
     const giveId1 = []; // acct 1
     const giveId2 = []; // acct 2
     let like;
@@ -246,7 +243,7 @@ contract("ContributorPool:give", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await cp.executeProposal(proposalId, {from: accounts[5]});
         }, "Should not allow to execute, give coins more than remaining available number");
-        
+
         // add additional likecoin so that is enough for execution.
         await like.transfer(cp.address, 1, {from: accounts[0]});
         await cp.executeProposal(proposalId, {from: accounts[5]});
@@ -275,7 +272,7 @@ contract("ContributorPool:give", (accounts) => {
         }, "Should not claim like any coins successfully");
         const acctBalance = await like.balanceOf(accounts[3]);
         assert.equal(acctBalance, 0, "0 units of coins should be in account[3], because no one give LIKE to this account");
-    })
+    });
 
     it("claim LIKE (general case)", async () => {
         // TEST_CONT_0017
@@ -326,15 +323,14 @@ contract("ContributorPool:give", (accounts) => {
         assert(contributorAmount.sub(testAmount.mul(4)).eq(await cp.getRemainingLikeCoins()), "Check LIKE remains. (vii)");
     });
 });
-    
+
 // story 2
 contract("ContributorPool:give2", (accounts) => {
     const owners = [1, 2, 3, 4, 5].map((i) => accounts[i]);
     const threshold = 3;
-    const newOwners = [5, 6, 7, 8].map((i) => accounts[i]);
-    const newThreshold = 2;
     const giveId3 = []; // acct 3
-    const testTime = lockTime - 1;
+    // testrpc seems to have some timing error, 10 seconds difference is acceptable in practice
+    const testTime = lockTime - 10;
     let like;
     let cp;
     let unlockTimestamp;
@@ -361,11 +357,11 @@ contract("ContributorPool:give2", (accounts) => {
         await cp.confirmProposal(proposalId, {from: accounts[4]});
         await cp.confirmProposal(proposalId, {from: accounts[2]});
         await cp.executeProposal(proposalId, {from: accounts[5]});
+        unlockTimestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp + lockTime;
         giveId3.push(proposalId);
         const acctBalance = await like.balanceOf(accounts[3]);
         assert.equal(acctBalance, 0, "0 units of coins should be in account[3]");
         assert.equal((await cp.getRemainingLikeCoins()), 0, "Check LIKE remains. (i)");
-        unlockTimestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp + lockTime;
     });
 
     it("claim before unlock time", async () => {
@@ -375,6 +371,7 @@ contract("ContributorPool:give2", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await cp.claim(giveId3[0], {from: accounts[3]});
         }, "Should not claim LIKE successfully before unlock time(after 1 year)");
+        assert.isBelow(web3.eth.getBlock(web3.eth.blockNumber).timestamp, unlockTimestamp, "Already on or after unlock time, please check test case");
         const acctBalance = await like.balanceOf(accounts[3]);
         assert.equal(acctBalance, 0, "0 units of coins should be in account[3]");
     });
@@ -408,10 +405,7 @@ contract("ContributorPool:give2", (accounts) => {
 contract("ContributorPool:give3", (accounts) => {
     const owners = [1, 2, 3, 4, 5].map((i) => accounts[i]);
     const threshold = 3;
-    const newOwners = [5, 6, 7, 8].map((i) => accounts[i]);
-    const newThreshold = 2;
     const giveId3 = []; // acct 3
-    const testTime = 86400 * 365;
     let like;
     let cp;
     const notExistId = [20, 21, 22];
@@ -427,7 +421,7 @@ contract("ContributorPool:give3", (accounts) => {
         const cpBalance = await like.balanceOf(cp.address);
         assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
     });
-    
+
     it("claim LIKE before confirm", async () => {
         // TEST_CONT_0024
         const amount = testAmount;
@@ -489,7 +483,6 @@ contract("ContributorPool:setowners", (accounts) => {
     const threshold = 3;
     const newOwners = [5, 6, 7, 8].map((i) => accounts[i]);
     const newThreshold = 2;
-    const testTime = 86400 * 365;
     let like;
     let cp;
     let giveId1, giveId2, giveId3;
@@ -627,7 +620,7 @@ contract("ContributorPool:setowners2", (accounts) => {
 
     it("test parms on deploying contributor pool 1", async () => {
         // TEST_CONT_0040
-        // deploy with 0 owners 
+        // deploy with 0 owners
         const invalidOwners = [];
         await utils.assertSolidityThrow(async () => {
             cp = await ContributorPool.new(like.address, invalidOwners, lockTime, 0);
@@ -636,7 +629,7 @@ contract("ContributorPool:setowners2", (accounts) => {
 
     it("deploying contributor pool with duplicate address", async () => {
         // TEST_CONT_0054
-        // deploy with 0 owners 
+        // deploy with 0 owners
         const invalidOwners = [accounts[1], accounts[1]];
         await utils.assertSolidityThrow(async () => {
             cp = await ContributorPool.new(like.address, invalidOwners, lockTime, threshold);
@@ -693,7 +686,7 @@ contract("ContributorPool:setowners3", (accounts) => {
 
     it("propose with invalid owners param 1", async () => {
         // TEST_CONT_0045
-        // 0 owners 
+        // 0 owners
         const invalidOwners = [];
         await utils.assertSolidityThrow(async () => {
             await cp.proposeSetOwners(invalidOwners, 0, {from:accounts[1]});
@@ -744,8 +737,6 @@ contract("ContributorPool:setowners3", (accounts) => {
 contract("ContributorPool:give4", (accounts) => {
     const owners = [1, 2, 3, 4, 5].map((i) => accounts[i]);
     const threshold = 3;
-    const giveId = [];
-    const testTime = 86400 * 365;
     let like;
     let cp;
 
@@ -823,7 +814,6 @@ contract("ContributorPool:give5", (accounts) => {
     it("mixed actions and execute after someone claimed", async () => {
         // TEST_CONT_0052
         const amount = testAmount;
-        const amount2 = testAmount;
         await cp.proposeGive(accounts[1], amount, {from: accounts[5]});
         const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
         await cp.confirmProposal(proposalId, {from: accounts[5]});
@@ -855,7 +845,6 @@ contract("ContributorPool:give5", (accounts) => {
     it("mixed actions and execute at separate time but claim both, one is after unlock time one is not", async () => {
         // TEST_CONT_0053
         const amount = testAmount;
-        const amount2 = testAmount;
         await cp.proposeGive(accounts[3], amount, {from: accounts[5]});
         const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
         await cp.confirmProposal(proposalId, {from: accounts[5]});
@@ -922,7 +911,7 @@ contract("ContributorEvent", (accounts) => {
             assert.equal(event.args._newOwners[i], newOwners[i], `SetOwnersProposal event has wrong value on field _newOwners[${i}]`);
         }
         assert.equal(event.args._newThreshold, newThreshold, "SetOwnersProposal event has wrong value on field '_newThreshold'");
-        
+
         await cp.confirmProposal(proposalId, {from:accounts[5]});
         event = await utils.solidityEventPromise(cp.ProposalConfirmation());
         assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
