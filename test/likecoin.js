@@ -109,6 +109,8 @@ contract("LikeCoin", (accounts) => {
         }, "Sending more than owned should be forbidden");
     });
 
+    let nonce = 0;
+
     it(`should allow others to do delegated transfer with signature`, async () => {
         const from = accounts[2];
         const to = accounts[3];
@@ -116,8 +118,8 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = maxReward.sub(1);
         const value = (await like.balanceOf(accounts[2])).sub(claimedReward);
+        nonce += 1;
         assert(value.gt(0), "accounts[2] does not have enough balance to transfer");
-        const nonce = 1;
         const privKey = Accounts[2].secretKey;
         const balance1Before = await like.balanceOf(accounts[1]);
         const balance2Before = await like.balanceOf(accounts[2]);
@@ -133,6 +135,42 @@ contract("LikeCoin", (accounts) => {
         await like.transfer(accounts[2], claimedReward, {from: accounts[1]});
     });
 
+    it(`should allow delegated transfer with empty data`, async () => {
+        const from = accounts[2];
+        const to = accounts[3];
+        const data = "";
+        const maxReward = new BigNumber(10).pow(17);
+        const claimedReward = maxReward.sub(1);
+        const value = (await like.balanceOf(accounts[2])).sub(claimedReward);
+        nonce += 1;
+        assert(value.gt(0), "accounts[2] does not have enough balance to transfer");
+        const privKey = Accounts[2].secretKey;
+        const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+        await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
+
+        // transfer back
+        await like.transfer(accounts[2], value, {from: accounts[3]});
+        await like.transfer(accounts[2], claimedReward, {from: accounts[1]});
+    });
+
+    it(`should allow delegated transfer claiming maxReward`, async () => {
+        const from = accounts[2];
+        const to = accounts[3];
+        const data = "";
+        const maxReward = new BigNumber(10).pow(17);
+        const claimedReward = maxReward;
+        const value = (await like.balanceOf(accounts[2])).sub(claimedReward);
+        nonce += 1;
+        assert(value.gt(0), "accounts[2] does not have enough balance to transfer");
+        const privKey = Accounts[2].secretKey;
+        const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+        await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
+
+        // transfer back
+        await like.transfer(accounts[2], value, {from: accounts[3]});
+        await like.transfer(accounts[2], claimedReward, {from: accounts[1]});
+    });
+
     it(`should forbid delegated transferring more than owned`, async () => {
         const from = accounts[2];
         const to = accounts[3];
@@ -140,7 +178,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = maxReward.sub(1);
         const value = (await like.balanceOf(accounts[2])).sub(claimedReward).add(1);
-        const nonce = 2;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -156,7 +194,7 @@ contract("LikeCoin", (accounts) => {
         const claimedReward = maxReward.add(1);
         assert(!(await like.balanceOf(from)).lt(claimedReward), "accounts[2] does not have enough balance to transfer");
         const value = 0;
-        const nonce =3;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -171,7 +209,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = new BigNumber(10).pow(17);
         const claimedReward = 0;
         const value = 0;
-        const nonce = 4;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
 
         let signature = signTransferAndCallDelegated(accounts[1], to, value, data, maxReward, nonce, privKey);
@@ -199,7 +237,7 @@ contract("LikeCoin", (accounts) => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
         }, "should forbid transferring with different maxReward from signature");
 
-        signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, 5, privKey);
+        signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce + 1, privKey);
         await utils.assertSolidityThrow(async () => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
         }, "should forbid transferring with different nonce from signature");
@@ -241,7 +279,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = 0;
         const claimedReward = 0;
         const value = 1;
-        const nonce = 6;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: accounts[1]});
@@ -258,7 +296,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = 0;
         const claimedReward = 0;
         const value = 1;
-        const nonce = 7;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await utils.assertSolidityThrow(async () => {
@@ -273,7 +311,7 @@ contract("LikeCoin", (accounts) => {
         const maxReward = 0;
         const claimedReward = 0;
         const value = 1;
-        const nonce = 8;
+        nonce += 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
 
@@ -566,7 +604,7 @@ contract("LikeCoinEvents", (accounts) => {
         const claimedReward = 50;
         const value = (await like.balanceOf(accounts[2])).sub(claimedReward);
         assert(value.gt(0), "accounts[2] does not have enough balance to transfer");
-        const nonce = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        const nonce = 1;
         const privKey = Accounts[2].secretKey;
         const signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
 
