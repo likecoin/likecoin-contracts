@@ -42,6 +42,7 @@ contract LikeCoin is ERC20 {
     uint public unlockTime = 0;
     bool public allowDelegate = true;
     mapping (address => mapping (uint256 => bool)) public usedNonce;
+    mapping (address => bool) public transferAndCallWhitelist;
 
     event Lock(address indexed _addr, uint256 _value);
     event OwnershipChanged(address _newOwner);
@@ -113,25 +114,10 @@ contract LikeCoin is ERC20 {
         return true;
     }
 
-    function transferMultiple(address[] _addrs, uint256 _value) public {
-        require(_addrs.length > 0);
-        _moveLockedBalance(msg.sender);
-        uint256 total = _addrs.length * _value;
-        require(total / _addrs.length == _value);
-        require(balances[msg.sender] >= total);
-        for (uint i = 0; i < _addrs.length; ++i) {
-            address addr = _addrs[i];
-            require(balances[addr] + _value >= balances[addr]);
-            balances[addr] += _value;
-            Transfer(msg.sender, addr, _value);
-        }
-        balances[msg.sender] -= total;
-    }
-
-    function transferMultipleValues(address[] _addrs, uint256[] _values) public {
+    function _transferMultiple(address _from, address[] _addrs, uint256[] _values) internal returns (bool success) {
         require(_addrs.length > 0);
         require(_values.length == _addrs.length);
-        _moveLockedBalance(msg.sender);
+        _moveLockedBalance(_from);
         uint256 total = 0;
         for (uint i = 0; i < _addrs.length; ++i) {
             address addr = _addrs[i];
@@ -142,10 +128,15 @@ contract LikeCoin is ERC20 {
             balance += value;
             total += value;
             balances[addr] = balance;
-            Transfer(msg.sender, addr, value);
+            Transfer(_from, addr, value);
         }
-        require(balances[msg.sender] >= total);
-        balances[msg.sender] -= total;
+        require(balances[_from] >= total);
+        balances[_from] -= total;
+        return true;
+    }
+
+    function transferMultiple(address[] _addrs, uint256[] _values) public returns (bool success) {
+        return _transferMultiple(msg.sender, _addrs, _values);
     }
 
     function _isContract(address _addr) internal constant returns (bool) {
@@ -154,6 +145,18 @@ contract LikeCoin is ERC20 {
             length := extcodesize(_addr)
         }
         return (length > 0);
+    }
+
+    function _transferAndCall(address _from, address _to, uint256 _value, bytes _data) internal returns (bool success) {
+        require(_isContract(_to));
+        require(transferAndCallWhitelist[_to]);
+        require(_transfer(_from, _to, _value));
+        TransferAndCallReceiver(_to).tokenCallback(_from, _value, _data);
+        return true;
+    }
+
+    function transferAndCall(address _to, uint256 _value, bytes _data) public returns (bool success) {
+        return _transferAndCall(msg.sender, _to, _value, _data);
     }
 
     function _bytesToSignature(bytes sig) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
@@ -191,20 +194,59 @@ contract LikeCoin is ERC20 {
     ) public returns (bool success) {
         require(allowDelegate);
         require(_claimedReward <= _maxReward);
-        require(!usedNonce[_from][_nonce]);
         require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
+        require(!usedNonce[_from][_nonce]);
         usedNonce[_from][_nonce] = true;
-        require(_transfer(_from, _to, _value));
         require(_transfer(_from, msg.sender, _claimedReward));
-        if (_isContract(_to)) {
-            TransferAndCallReceiver(_to).tokenCallback(_from, _value, _data);
-        }
+        return _transferAndCall(_from, _to, _value, _data);
         return true;
+    }
+
+    bytes32 transferMultipleDelegatedHash = keccak256("address contract", "string method", "address[] addrs", "uint256[] values", "uint256 maxReward", "uint256 nonce");
+    function transferMultipleDelegatedRecover(
+        address[] _addrs,
+        uint256[] _values,
+        uint256 _maxReward,
+        uint256 _nonce,
+        bytes _signature
+    ) public constant returns (address) {
+        bytes32 hash = keccak256(transferMultipleDelegatedHash, keccak256(this, "transferMultipleDelegated", _addrs, _values, _maxReward, _nonce));
+        var (v, r, s) = _bytesToSignature(_signature);
+        return ecrecover(hash, v, r, s);
+    }
+
+    function transferMultipleDelegated(
+        address _from,
+        address[] _addrs,
+        uint256[] _values,
+        uint256 _maxReward,
+        uint256 _claimedReward,
+        uint256 _nonce,
+        bytes _signature
+    ) public returns (bool success) {
+        require(allowDelegate);
+        require(_claimedReward <= _maxReward);
+        require(transferMultipleDelegatedRecover(_addrs, _values, _maxReward, _nonce, _signature) == _from);
+        require(!usedNonce[_from][_nonce]);
+        usedNonce[_from][_nonce] = true;
+        require(_transfer(_from, msg.sender, _claimedReward));
+        return _transferMultiple(_from, _addrs, _values);
     }
 
     function switchDelegate(bool _allowed) public {
         require(msg.sender == owner);
         allowDelegate = _allowed;
+    }
+
+    function addTransferAndCallWhitelist(address _contract) public {
+        require(msg.sender == owner);
+        require(_isContract(_contract));
+        transferAndCallWhitelist[_contract] = true;
+    }
+
+    function removeTransferAndCallWhitelist(address _contract) public {
+        require(msg.sender == owner);
+        delete transferAndCallWhitelist[_contract];
     }
 
     function approve(address _spender, uint256 _value) public returns (bool success) {

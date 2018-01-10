@@ -2764,7 +2764,31 @@ watchpack@^1.4.0:
     chokidar "^1.7.0"
     graceful-fs "^4.1.2"
 
-web3-utils@^1.0.0-beta.27:
+web3-core-helpers@1.0.0-beta.27:
+  version "1.0.0-beta.27"
+  resolved "https://registry.yarnpkg.com/web3-core-helpers/-/web3-core-helpers-1.0.0-beta.27.tgz#eb094fad37c9dc1d7066dd756629a2d6efba07a2"
+  dependencies:
+    underscore "1.8.3"
+    web3-eth-iban "1.0.0-beta.27"
+    web3-utils "1.0.0-beta.27"
+
+web3-eth-abi@^1.0.0-beta.27:
+  version "1.0.0-beta.27"
+  resolved "https://registry.yarnpkg.com/web3-eth-abi/-/web3-eth-abi-1.0.0-beta.27.tgz#452e9d93761560be32344ee3b8975d0fb24bbdbe"
+  dependencies:
+    bn.js "4.11.6"
+    underscore "1.8.3"
+    web3-core-helpers "1.0.0-beta.27"
+    web3-utils "1.0.0-beta.27"
+
+web3-eth-iban@1.0.0-beta.27:
+  version "1.0.0-beta.27"
+  resolved "https://registry.yarnpkg.com/web3-eth-iban/-/web3-eth-iban-1.0.0-beta.27.tgz#4433c28f417c39af96333a06a4afa1fcd4aa6842"
+  dependencies:
+    bn.js "^4.11.6"
+    web3-utils "1.0.0-beta.27"
+
+web3-utils@1.0.0-beta.27, web3-utils@^1.0.0-beta.27:
   version "1.0.0-beta.27"
   resolved "https://registry.yarnpkg.com/web3-utils/-/web3-utils-1.0.0-beta.27.tgz#d097d5c336a16b9f6ca9b60af68dd15c0643214b"
   dependencies:
