@@ -84,6 +84,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should forbid accounts[1] to register crowdsale contract");
 
         await like.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, {from: accounts[1]});
+        }, "should forbid pending owner accounts[1] to register crowdsale contract");
+
         await like.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, {from: accounts[0]});
@@ -153,6 +157,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should forbid adding private fund from accounts[1]");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.addPrivateFund(accounts[7], remaining, {from: accounts[1]});
+        }, "should forbid adding private fund from pending owner accounts[1]");
+
         const callResult = await crowdsale.acceptOwnership({from: accounts[1]});
         const ownershipChangedEvent = utils.solidityEvent(callResult, "OwnershipChanged");
         assert.equal(ownershipChangedEvent.args._newOwner, accounts[1], "OwnershipChanged event has wrong value on field '_newOwner'");
@@ -171,6 +179,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should forbid finalizing private fund from accounts[1]");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.finalizePrivateFund({from: accounts[1]});
+        }, "should forbid finalizing private fund from pending owner accounts[1]");
+
         await crowdsale.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await crowdsale.finalizePrivateFund({from: accounts[0]});
@@ -210,6 +222,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "Calling transferLike from non-owner should be forbidden");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.transferLike(accounts[0], 1, {from: accounts[1]});
+        }, "Calling transferLike from pending owner should be forbidden");
+
         await crowdsale.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await crowdsale.transferLike(accounts[0], 1, {from: accounts[0]});
@@ -256,6 +272,26 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async() => {
             await web3.eth.sendTransaction({from: accounts[2], to: crowdsale.address, value: buyWeis[2], gas: "200000"});
         }, "Buying coins before KYC should be forbidden");
+    });
+
+    it("should forbid non-owner to register KYC", async () => {
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.registerKYC([accounts[2]], {from: accounts[1]});
+        }, "Calling registerKYC from non-owner should be forbidden");
+
+        await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+          await crowdsale.registerKYC([accounts[2]], {from: accounts[1]});
+        }, "Calling registerKYC from pending owner should be forbidden");
+
+        await crowdsale.acceptOwnership({from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.registerKYC([accounts[2]], {from: accounts[0]});
+        }, "Calling registerKYC from old owner should be forbidden");
+
+        // change back
+        await crowdsale.changeOwner(accounts[0], {from: accounts[1]});
+        await crowdsale.acceptOwnership({from: accounts[0]});
     });
 
     it("should allow buying coins after KYC", async () => {
@@ -349,6 +385,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "should forbid non-owner accounts[1] to set referrer");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.registerReferrer(accounts[1], accounts[9], {from: accounts[1]});
+        }, "should forbid pending owner accounts[1] to set referrer");
+
         await crowdsale.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await crowdsale.registerReferrer(accounts[1], accounts[9], {from: accounts[0]});
@@ -390,6 +430,10 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         }, "Calling finalize from non-owner should be forbidden");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.finalize({from: accounts[1]});
+        }, "Calling finalize from pending owner should be forbidden");
+
         await crowdsale.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await crowdsale.finalize({from: accounts[0]});
@@ -495,6 +539,10 @@ contract("LikeCoin Crowdsale 2", (accounts) => {
         }, "Should not allow non-owner to change price");
 
         await crowdsale.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await crowdsale.changePrice(coinsPerEth, {from: accounts[1]});
+        }, "Should not allow pending owner to change price");
+
         await crowdsale.acceptOwnership({from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
             await crowdsale.changePrice(coinsPerEth, {from: accounts[0]});
