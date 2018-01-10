@@ -110,7 +110,7 @@ contract("LikeCoin User Growth Pools", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.registerUserGrowthPools(pools.map((pool) => pool.address), {from: accounts[0]});
         }, "should forbid old owner accounts[0] to register UserGrowthPools");
-        // change bacck
+        // change back
         await like.changeOwner(accounts[0], {from: accounts[1]});
         await like.acceptOwnership({from: accounts[0]});
     });

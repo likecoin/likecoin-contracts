@@ -32,7 +32,7 @@ contract LikeCoin is ERC20 {
     mapping(address => mapping(address => uint256)) public allowed;
 
     address public owner = 0x0;
-    address public newOwner = 0x0;
+    address public pendingOwner = 0x0;
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
@@ -54,15 +54,16 @@ contract LikeCoin is ERC20 {
         Transfer(0x0, owner, _initialSupply);
     }
 
-    function changeOwner(address _newOwner) public {
+    function changeOwner(address _pendingOwner) public {
         require(msg.sender == owner);
-        newOwner = _newOwner;
+        require(_pendingOwner != owner);
+        pendingOwner = _pendingOwner;
     }
 
     function acceptOwnership() public {
-        require(msg.sender == newOwner);
-        owner = newOwner;
-        newOwner = 0x0;
+        require(msg.sender == pendingOwner);
+        owner = pendingOwner;
+        pendingOwner = 0x0;
         OwnershipChanged(owner);
     }
 
@@ -74,7 +75,7 @@ contract LikeCoin is ERC20 {
         return balances[_owner] + lockedBalances[_owner];
     }
 
-    function _moveLockedBalance(address _from) internal {
+    function _tryUnlockBalance(address _from) internal {
         if (unlockTime != 0 && now >= unlockTime && lockedBalances[_from] > 0) {
             balances[_from] += lockedBalances[_from];
             delete lockedBalances[_from];
@@ -82,7 +83,7 @@ contract LikeCoin is ERC20 {
     }
 
     function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
-        _moveLockedBalance(_from);
+        _tryUnlockBalance(_from);
         require(balances[_from] >= _value);
         require(balances[_to] + _value >= balances[_to]);
         balances[_from] -= _value;
@@ -117,7 +118,7 @@ contract LikeCoin is ERC20 {
     function _transferMultiple(address _from, address[] _addrs, uint256[] _values) internal returns (bool success) {
         require(_addrs.length > 0);
         require(_values.length == _addrs.length);
-        _moveLockedBalance(_from);
+        _tryUnlockBalance(_from);
         uint256 total = 0;
         for (uint i = 0; i < _addrs.length; ++i) {
             address addr = _addrs[i];
@@ -163,7 +164,7 @@ contract LikeCoin is ERC20 {
         assembly {
             r := mload(add(sig, 32))
             s := mload(add(sig, 64))
-            v := and(mload(add(sig, 65)), 255)
+            v := and(mload(add(sig, 65)), 0xFF)
         }
         return (v, r, s);
     }
@@ -199,7 +200,6 @@ contract LikeCoin is ERC20 {
         usedNonce[_from][_nonce] = true;
         require(_transfer(_from, msg.sender, _claimedReward));
         return _transferAndCall(_from, _to, _value, _data);
-        return true;
     }
 
     bytes32 transferMultipleDelegatedHash = keccak256("address contract", "string method", "address[] addrs", "uint256[] values", "uint256 maxReward", "uint256 nonce");
@@ -235,17 +235,20 @@ contract LikeCoin is ERC20 {
 
     function switchDelegate(bool _allowed) public {
         require(msg.sender == owner);
+        require(allowDelegate != _allowed);
         allowDelegate = _allowed;
     }
 
     function addTransferAndCallWhitelist(address _contract) public {
         require(msg.sender == owner);
         require(_isContract(_contract));
+        require(!transferAndCallWhitelist[_contract]);
         transferAndCallWhitelist[_contract] = true;
     }
 
     function removeTransferAndCallWhitelist(address _contract) public {
         require(msg.sender == owner);
+        require(transferAndCallWhitelist[_contract]);
         delete transferAndCallWhitelist[_contract];
     }
 

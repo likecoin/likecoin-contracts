@@ -21,7 +21,7 @@ import "./LikeCoin.sol";
 
 contract LikeCrowdsale {
     address public owner = 0x0;
-    address public newOwner = 0x0;
+    address public pendingOwner = 0x0;
     LikeCoin public like = LikeCoin(0x0);
     uint public start = 0;
     uint public end = 0;
@@ -59,23 +59,25 @@ contract LikeCrowdsale {
         referrerBonusPercent = _referrerBonusPercent;
     }
 
-    function changeOwner(address _newOwner) public {
+    function changeOwner(address _pendingOwner) public {
         require(msg.sender == owner);
-        newOwner = _newOwner;
+        require(_pendingOwner != owner);
+        pendingOwner = _pendingOwner;
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == pendingOwner);
+        owner = pendingOwner;
+        pendingOwner = 0x0;
+        OwnershipChanged(owner);
     }
 
     function changePrice(uint256 _newCoinsPerEth) public {
         require(msg.sender == owner);
+        require(_newCoinsPerEth != coinsPerEth);
         require(now < start);
         coinsPerEth = _newCoinsPerEth;
         PriceChanged(_newCoinsPerEth);
-    }
-
-    function acceptOwnership() public {
-        require(msg.sender == newOwner);
-        owner = newOwner;
-        newOwner = 0x0;
-        OwnershipChanged(owner);
     }
 
     function isPrivateFundFinalized() public constant returns (bool) {

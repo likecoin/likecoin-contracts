@@ -88,7 +88,7 @@ contract("LikeCoin Crowdsale 1", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, {from: accounts[0]});
         }, "should forbid accounts[0] to register crowdsale contract after changing owner");
-        // change bacck
+        // change back
         await like.changeOwner(accounts[0], {from: accounts[1]});
         await like.acceptOwnership({from: accounts[0]});
     });

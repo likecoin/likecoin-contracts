@@ -108,7 +108,7 @@ contract("LikeCoin Basic", (accounts) => {
     });
 
     const allowance = new BigNumber(10000);
-    it(`should allow user to transfer maximum allowance`, async () => {
+    it(`should allow user to transfer from others with allowance`, async () => {
         const startingBalance0 = (await like.balanceOf(accounts[0]));
         const startingBalance1 = (await like.balanceOf(accounts[1]));
         const startingBalance2 = (await like.balanceOf(accounts[2]));
@@ -181,6 +181,7 @@ contract("LikeCoin Basic", (accounts) => {
     it("should allow transfer all balance", async () => {
         const balance0Before = await like.balanceOf(accounts[0]);
         const balance1Before = await like.balanceOf(accounts[1]);
+        assert(balance0Before.gt(0), "Sender does not have any balance, please check test case");
         await like.transfer(accounts[1], balance0Before, {from: accounts[0]});
         assert((await like.balanceOf(accounts[0])).eq(0), "Sender should not have balance remaining");
         assert((await like.balanceOf(accounts[1])).eq(balance0Before.add(balance1Before)), "Receiver's balance wasn't correctly changed");
@@ -435,16 +436,16 @@ contract("LikeCoin transferAndCall", (accounts) => {
         await like.changeOwner(accounts[1], {from: accounts[0]});
         await utils.assertSolidityThrow(async () => {
             await like.removeTransferAndCallWhitelist(mock.address, {from: accounts[1]});
-        }, "New owner should not be able to remove contracts from whitelist before accepting ownership");
+        }, "Pending owner should not be able to remove contracts from whitelist before accepting ownership");
 
         await like.removeTransferAndCallWhitelist(mock.address, {from: accounts[0]});
         await utils.assertSolidityThrow(async () => {
             await like.addTransferAndCallWhitelist(mock.address, {from: accounts[1]});
-        }, "New owner should not be able to add contracts into whitelist before accepting ownership");
+        }, "Pending owner should not be able to add contracts into whitelist before accepting ownership");
 
         await utils.assertSolidityThrow(async () => {
             await like.acceptOwnership({from: accounts[2]});
-        }, "Only new owner can accept ownership");
+        }, "Only pending owner can accept ownership");
         await like.acceptOwnership({from: accounts[1]});
         await like.addTransferAndCallWhitelist(mock.address, {from: accounts[1]});
         await utils.assertSolidityThrow(async () => {
@@ -509,6 +510,7 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
             assert(event.args._value.eq(values[i]), "Transfer event has wrong value on field '_value'");
         }
 
+        assert((await like.balanceOf(caller)).eq(claimedReward), `Caller owns wrong amount of coins after tranferMultiple`);
         for (let i = 0; i < addrs.length; ++i) {
             assert((await like.balanceOf(addrs[i])).eq(values[i]), `account ${addrs[i]} owns wrong amount of coins after tranferMultiple`);
         }
@@ -518,7 +520,9 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
     it(`should allow transferMultipleDelegated with only 1 target account`, async () => {
         const from = accounts[0];
         const privKey = Accounts[0].secretKey;
+        const balanceBeforeFrom = await like.balanceOf(from);
         const addrs = [2].map((i) => accounts[i]);
+        const balanceBeforeTo = await like.balanceOf(addrs[0]);
         const values = [2000];
         const maxReward = coinsToCoinUnits(1);
         const claimedReward = maxReward.div(2);
@@ -526,7 +530,11 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
         const signature = signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
 
         const caller = accounts[1];
+        const balanceBeforeCaller = await like.balanceOf(caller);
         await like.transferMultipleDelegated(from, addrs, values, maxReward, claimedReward, nonce, signature, {from: caller});
+        assert((await like.balanceOf(from)).eq(balanceBeforeFrom.sub(claimedReward).sub(values[0])), `Sender owns wrong amount of coins after tranferMultiple`);
+        assert((await like.balanceOf(caller)).eq(balanceBeforeCaller.add(claimedReward)), `Caller owns wrong amount of coins after tranferMultiple`);
+        assert((await like.balanceOf(addrs[0])).eq(balanceBeforeTo.add(values[0])), `Receiver owns wrong amount of coins after tranferMultiple`);
     });
 
     it(`should forbid transferring more than remaining`, async () => {
@@ -611,7 +619,7 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
         const privKey = Accounts[1].secretKey;
         const addrs = [2, 3, 4].map((i) => accounts[i]);
         const values = [200, 300, 400];
-        const maxReward = coinsToCoinUnits(1);
+        let maxReward = coinsToCoinUnits(1);
         let claimedReward = maxReward.add(1);
         let nonce = web3Utils.randomHex(32);
         let signature = signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
@@ -626,6 +634,12 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
         signature = signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
         await like.transferMultipleDelegated(from, addrs, values, maxReward, claimedReward, nonce, signature, {from: caller});
 
+        claimedReward = 0;
+        nonce = web3Utils.randomHex(32);
+        signature = signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+        await like.transferMultipleDelegated(from, addrs, values, maxReward, claimedReward, nonce, signature, {from: caller});
+
+        maxReward = 0;
         claimedReward = 0;
         nonce = web3Utils.randomHex(32);
         signature = signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
@@ -680,7 +694,7 @@ contract("LikeCoin transferMultipleDelegated", (accounts) => {
             await like.transferMultipleDelegated(from, addrs, values, maxReward, claimedReward, nonce, signature, {from: caller});
         }, "should forbid transferring with wrong signing key");
 
-        signature = web3Utils.randomHex(32);
+        signature = web3Utils.randomHex(65);
         await utils.assertSolidityThrow(async () => {
             await like.transferMultipleDelegated(from, addrs, values, maxReward, claimedReward, nonce, signature, {from: caller});
         }, "should forbid transferring with random signature");
@@ -759,7 +773,6 @@ contract("LikeCoin transferAndCallDelegated", (accounts) => {
         assert(await like.balanceOf("0x1024102410241024102410241024102410241024"), value, "Wrong callback receiver balance after transferAndCallDelegated");
     });
 
-    // TODO
     it(`should forbid transferring more LIKE than owned`, async () => {
         const from = accounts[0];
         const privKey = Accounts[0].secretKey;
@@ -852,12 +865,12 @@ contract("LikeCoin transferAndCallDelegated", (accounts) => {
         await like.changeOwner(accounts[1], {from: accounts[0]});
         await utils.assertSolidityThrow(async () => {
             await like.removeTransferAndCallWhitelist(mock.address, {from: accounts[1]});
-        }, "New owner should not be able to remove contracts from whitelist before accepting ownership");
+        }, "Pending owner should not be able to remove contracts from whitelist before accepting ownership");
 
         await like.removeTransferAndCallWhitelist(mock.address, {from: accounts[0]});
         await utils.assertSolidityThrow(async () => {
             await like.addTransferAndCallWhitelist(mock.address, {from: accounts[1]});
-        }, "New owner should not be able to add contracts into whitelist before accepting ownership");
+        }, "Pending owner should not be able to add contracts into whitelist before accepting ownership");
 
         await utils.assertSolidityThrow(async () => {
             await like.acceptOwnership({from: accounts[2]});
@@ -899,7 +912,7 @@ contract("LikeCoin transferAndCallDelegated", (accounts) => {
         const to = mock.address;
         const value = 1;
         const data = "0x1337133713371337133713371337133713371337133713371337133713371337";
-        const maxReward = coinsToCoinUnits(1);
+        let maxReward = coinsToCoinUnits(1);
 
         let claimedReward = maxReward.add(1);
         let nonce = web3Utils.randomHex(32);
@@ -915,6 +928,12 @@ contract("LikeCoin transferAndCallDelegated", (accounts) => {
         signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
         await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: caller});
 
+        claimedReward = 0;
+        nonce = web3Utils.randomHex(32);
+        signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+        await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: caller});
+
+        maxReward = 0;
         claimedReward = 0;
         nonce = web3Utils.randomHex(32);
         signature = signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
@@ -978,7 +997,7 @@ contract("LikeCoin transferAndCallDelegated", (accounts) => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: caller});
         }, "should forbid transferring with wrong signing key");
 
-        signature = web3Utils.randomHex(32);
+        signature = web3Utils.randomHex(65);
         await utils.assertSolidityThrow(async () => {
             await like.transferAndCallDelegated(from, to, value, data, maxReward, claimedReward, nonce, signature, {from: caller});
         }, "should forbid transferring with random signature");
@@ -1056,6 +1075,27 @@ contract("LikeCoin delegated switch", (accounts) => {
         await utils.assertSolidityThrow(async () => {
             await like.switchDelegate(true, {from: accounts[1]});
         }, "Non-owners should not be able to switch on delegate");
+
+        await like.changeOwner(accounts[1], {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(true, {from: accounts[1]});
+        }, "Pending owner should not be able to switch on delegate before accepting ownership");
+
+        await like.switchDelegate(true, {from: accounts[0]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(false, {from: accounts[1]});
+        }, "Pending owner should not be able to switch off delegate before accepting ownership");
+
+        await like.acceptOwnership({from: accounts[1]});
+        await like.switchDelegate(false, {from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(true, {from: accounts[0]});
+        }, "Old owner should not be able to switch on delegate before accepting ownership");
+
+        await like.switchDelegate(true, {from: accounts[1]});
+        await utils.assertSolidityThrow(async () => {
+            await like.switchDelegate(false, {from: accounts[0]});
+        }, "Old owner should not be able to switch off delegate before accepting ownership");
     });
 });
 
@@ -1066,18 +1106,9 @@ contract("LikeCoin Events", (accounts) => {
     it("should emit Transfer event when deploy contract", async () => {
         like = await LikeCoin.new(initialAmount);
         const transferEvent = await utils.solidityEventPromise(like.Transfer());
-        assert.equal(transferEvent.args._from, 0, "Transfer event has wrong value on field '_from'");
+        assert.equal(transferEvent.args._from, 0x0, "Transfer event has wrong value on field '_from'");
         assert.equal(transferEvent.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
         assert(transferEvent.args._value.eq(initialAmount), "Transfer event has wrong value on field '_from'");
-    });
-
-    const burnAmount = 161;
-    it(`should emit Transfer event after burn`, async () => {
-        const callResult = await like.burn(burnAmount);
-        const event = utils.solidityEvent(callResult, "Transfer");
-        assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-        assert.equal(event.args._to, 0x0, "Transfer event has wrong value on field '_to'");
-        assert(event.args._value.eq(burnAmount), "Transfer event has wrong value on field '_value'");
     });
 
     const crowdsaleAmount = 100000;
@@ -1109,7 +1140,6 @@ contract("LikeCoin Events", (accounts) => {
         assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
     });
 
-    // TODO
     it("should emit OwnershipChanged event after change owner", async () => {
         await like.changeOwner(accounts[1], {from: accounts[0]});
         const callResult = await like.acceptOwnership({from: accounts[1]});
