@@ -13,6 +13,9 @@ jobs:
           name: Dependencies
           command: yarn
       - run:
+          name: Lint
+          command: yarn run lint
+      - run:
           name: Start testrpc server
           command: yarn run server
           background: true

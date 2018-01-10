@@ -12,7 +12,8 @@
   "scripts": {
     "server": "./testrpc.js",
     "test": "truffle test",
-    "compile": "truffle compile"
+    "compile": "truffle compile",
+    "lint": "eslint ."
   },
   "contributors": [
     "Chung Wu <chung@likecoin.foundation>",
@@ -25,11 +26,14 @@
   "dependencies": {
     "bignumber.js": "^4.1.0",
     "eth-lib": "^0.2.5",
+    "ethereumjs-testrpc": "^6.0.3",
+    "truffle": "^4.0.1",
     "web3-eth-abi": "^1.0.0-beta.27",
     "web3-utils": "^1.0.0-beta.27"
   },
   "devDependencies": {
-    "ethereumjs-testrpc": "^6.0.3",
-    "truffle": "^4.0.1"
+    "eslint": "^4.15.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0"
   }
 }
