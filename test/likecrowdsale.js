@@ -509,7 +509,6 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     const contractBalance2 = web3.eth.getBalance(crowdsale.address);
     assert(ownerBalance2.eq(ownerBalance1.add(contractBalance1)), 'Wrong owner balance after finalization');
     assert(contractBalance2.eq(0), 'Wrong contract balance after finalization');
-    assert((await like.balanceOf(crowdsale.address)).eq(0), 'No coins should remain after finalization');
   });
 
   it('should forbid calling finalize more than once', async () => {
