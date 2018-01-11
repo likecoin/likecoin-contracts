@@ -21,6 +21,7 @@ import "./LikeCoin.sol";
 
 contract LikeCrowdsale {
     address public owner = 0x0;
+    address public pendingOwner = 0x0;
     LikeCoin public like = LikeCoin(0x0);
     uint public start = 0;
     uint public end = 0;
@@ -34,12 +35,15 @@ contract LikeCrowdsale {
     bool privateFundFinalized = false;
     bool finalized = false;
 
+    event OwnershipChanged(address _newOwner);
+    event PriceChanged(uint256 _newPrice);
     event AddPrivateFund(address indexed _addr, uint256 _value);
     event FinalizePrivateFund();
     event RegisterKYC(address indexed _addr);
     event RegisterReferrer(address indexed _addr, address indexed _referrer);
     event Purchase(address indexed _addr, uint256 _ethers, uint256 _coins);
     event ReferrerBonus(address indexed _referrer, address indexed _buyer, uint256 _bonus);
+    event LikeTransfer(address indexed _to, uint256 _value);
     event Finalize();
 
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) public {
@@ -53,6 +57,27 @@ contract LikeCrowdsale {
         coinsPerEth = _coinsPerEth;
         hardCap = _hardCap;
         referrerBonusPercent = _referrerBonusPercent;
+    }
+
+    function changeOwner(address _pendingOwner) public {
+        require(msg.sender == owner);
+        require(_pendingOwner != owner);
+        pendingOwner = _pendingOwner;
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == pendingOwner);
+        owner = pendingOwner;
+        pendingOwner = 0x0;
+        OwnershipChanged(owner);
+    }
+
+    function changePrice(uint256 _newCoinsPerEth) public {
+        require(msg.sender == owner);
+        require(_newCoinsPerEth != coinsPerEth);
+        require(now < start);
+        coinsPerEth = _newCoinsPerEth;
+        PriceChanged(_newCoinsPerEth);
     }
 
     function isPrivateFundFinalized() public constant returns (bool) {
@@ -106,6 +131,13 @@ contract LikeCrowdsale {
             like.transfer(referrer[msg.sender], bonus);
             ReferrerBonus(referrer[msg.sender], msg.sender, bonus);
         }
+    }
+
+    function transferLike(address _to, uint256 _value) public {
+        require(msg.sender == owner);
+        require(now < start || now >= end);
+        like.transfer(_to, _value);
+        LikeTransfer(_to, _value);
     }
 
     function finalize() public {
