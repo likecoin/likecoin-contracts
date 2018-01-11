@@ -147,9 +147,6 @@ contract LikeCrowdsale {
         uint256 remainingCoins = like.balanceOf(this);
         require(now >= end || remainingCoins == 0);
         owner.transfer(this.balance);
-        if (remainingCoins != 0) {
-            like.burn(remainingCoins);
-        }
         finalized = true;
         Finalize();
     }
