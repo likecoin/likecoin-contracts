@@ -26,19 +26,16 @@ contract LikeCrowdsale {
     uint public start = 0;
     uint public end = 0;
     uint256 public coinsPerEth = 0;
-    uint256 public hardCap = 0;
     uint256 public referrerBonusPercent = 0;
 
     mapping (address => bool) public kycDone;
     mapping (address => address) public referrer;
 
-    bool privateFundFinalized = false;
     bool finalized = false;
 
     event OwnershipChanged(address _newOwner);
     event PriceChanged(uint256 _newPrice);
     event AddPrivateFund(address indexed _addr, uint256 _value);
-    event FinalizePrivateFund();
     event RegisterKYC(address indexed _addr);
     event RegisterReferrer(address indexed _addr, address indexed _referrer);
     event Purchase(address indexed _addr, uint256 _ethers, uint256 _coins);
@@ -46,8 +43,7 @@ contract LikeCrowdsale {
     event LikeTransfer(address indexed _to, uint256 _value);
     event Finalize();
 
-    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint256 _hardCap, uint8 _referrerBonusPercent) public {
-        require(_hardCap != 0);
+    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint8 _referrerBonusPercent) public {
         require(_coinsPerEth != 0);
         require(_referrerBonusPercent != 0);
         owner = msg.sender;
@@ -55,7 +51,6 @@ contract LikeCrowdsale {
         start = _start;
         end = _end;
         coinsPerEth = _coinsPerEth;
-        hardCap = _hardCap;
         referrerBonusPercent = _referrerBonusPercent;
     }
 
@@ -80,23 +75,13 @@ contract LikeCrowdsale {
         PriceChanged(_newCoinsPerEth);
     }
 
-    function isPrivateFundFinalized() public constant returns (bool) {
-        return privateFundFinalized || now >= start;
-    }
-
     function addPrivateFund(address _addr, uint256 _value) public {
         require(msg.sender == owner);
-        require(!isPrivateFundFinalized());
+        require(now < start);
         require(_value > 0);
         require(like.balanceOf(this) >= _value);
         like.transferAndLock(_addr, _value);
         AddPrivateFund(_addr, _value);
-    }
-
-    function finalizePrivateFund() public {
-        require(msg.sender == owner);
-        privateFundFinalized = true;
-        FinalizePrivateFund();
     }
 
     function registerKYC(address[] _customerAddrs) public {

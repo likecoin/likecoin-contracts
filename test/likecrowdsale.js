@@ -69,7 +69,7 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     unlockTime = end + 10000;
     like = await LikeCoin.new(initialSupply);
     crowdsale =
-      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
+      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, referrerBonusPercent);
   });
 
   it('should deploy the crowdsale contract correctly', async () => {
@@ -77,9 +77,7 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     assert((await crowdsale.start()).eq(start), 'LikeCrowdsale contract has wrong start');
     assert((await crowdsale.end()).eq(end), 'LikeCrowdsale contract has wrong end');
     assert((await crowdsale.coinsPerEth()).eq(coinsPerEth), 'LikeCrowdsale contract has wrong coinsPerEth');
-    assert((await crowdsale.hardCap()).eq(hardCap), 'LikeCrowdsale contract has wrong hardCap');
     assert((await crowdsale.referrerBonusPercent()).eq(referrerBonusPercent), 'LikeCrowdsale contract has wrong referrerBonusPercent');
-    assert.equal(await crowdsale.isPrivateFundFinalized(), false, 'LikeCrowdsale contract has wrong privateFundFinalized');
   });
 
   it('should forbid non-owner to register crowdsale contract', async () => {
@@ -175,39 +173,6 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     // change back
     await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
     await crowdsale.acceptOwnership({ from: accounts[0] });
-  });
-
-  it('should forbid non-owner to finalize private fund', async () => {
-    await utils.assertSolidityThrow(async () => {
-      await crowdsale.finalizePrivateFund({ from: accounts[1] });
-    }, 'should forbid finalizing private fund from accounts[1]');
-
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
-    await utils.assertSolidityThrow(async () => {
-      await crowdsale.finalizePrivateFund({ from: accounts[1] });
-    }, 'should forbid finalizing private fund from pending owner accounts[1]');
-
-    await crowdsale.acceptOwnership({ from: accounts[1] });
-    await utils.assertSolidityThrow(async () => {
-      await crowdsale.finalizePrivateFund({ from: accounts[0] });
-    }, 'should forbid finalizing private fund from old owner accounts[0]');
-
-    // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
-  });
-
-  it('should forbid adding private fund after finalizing private fund', async () => {
-    const finalizeFlag1 = await crowdsale.isPrivateFundFinalized();
-    assert.equal(finalizeFlag1, false, 'Finalize flag is already set before finalizing private fund, please adjust test case');
-    utils.solidityEvent(await crowdsale.finalizePrivateFund(), 'FinalizePrivateFund');
-    const finalizeFlag2 = await crowdsale.isPrivateFundFinalized();
-    assert.equal(finalizeFlag2, true, 'Finalize flag should be not set');
-    const remaining = await like.balanceOf(crowdsale.address);
-    assert(!remaining.eq(0), 'Remaining coins is 0, please check test case');
-    await utils.assertSolidityThrow(async () => {
-      await crowdsale.addPrivateFund(accounts[7], remaining);
-    }, 'should forbid adding private fund after finalizing private fund');
   });
 
   it('should lock private fund until unlock time', async () => {
@@ -519,7 +484,7 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
 
   it('should forbid registering another crowdsale contract', async () => {
     const anotherCrowdsale =
-      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, hardCap, referrerBonusPercent);
+      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, referrerBonusPercent);
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(anotherCrowdsale.address, hardCap, unlockTime);
     }, 'Registering another crowdsale contract should be forbidden');
@@ -569,8 +534,8 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
     unlockTime = now + 0xFFFFFFFF;
     like = await LikeCoin.new(0);
     crowdsale = await LikeCrowdsale.new(
-      like.address, start, end, oldCoinsPerEth,
-      hardCap, referrerBonusPercent,
+      like.address, start, end,
+      oldCoinsPerEth, referrerBonusPercent,
     );
     await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
     await crowdsale.addPrivateFund(accounts[1], privateFunds[1]);
@@ -615,7 +580,6 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
   });
 
   it('should forbid adding private fund after crowdsale started', async () => {
-    assert.equal(await crowdsale.isPrivateFundFinalized(), true, 'isPrivateFundFinalized should be set to true');
     await utils.assertSolidityThrow(async () => {
       await crowdsale.addPrivateFund(accounts[3], 10000000);
     }, 'crowdsale has already started, adding private fund should be forbidden');
@@ -689,7 +653,7 @@ contract('LikeCoin Crowdsale Overflow', () => {
     const cap = new BigNumber(2).pow(256).sub(1);
     const like = await LikeCoin.new(1);
     const crowdsale =
-      await LikeCrowdsale.new(like.address, now + 100, now + 200, 1, cap, referrerBonusPercent);
+      await LikeCrowdsale.new(like.address, now + 100, now + 200, 1, referrerBonusPercent);
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(crowdsale.address, cap, now + 300);
     }, 'Should forbid hardCap which will overflow');

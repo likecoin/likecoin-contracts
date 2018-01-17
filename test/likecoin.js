@@ -244,8 +244,10 @@ contract('LikeCoin Basic', (accounts) => {
     assert(!balance1.eq(0), 'Banalce in accounts[1] is 0, please check test case');
 
     await utils.assertSolidityThrow(async () => {
-      await like.transferAndLock(accounts[1], 1, { from: accounts[0] });
-    }, 'Only crowdsale address can call transferAndLock');
+      assert.notEqual(await like.owner(), accounts[2], 'accounts[2] should not be owner, please check test case.');
+      assert(!(await like.balanceOf(accounts[2])).eq(0), 'accounts[2] has no balance, please check test case.');
+      await like.transferAndLock(accounts[1], 1, { from: accounts[2] });
+    }, 'Only crowdsale address or owner can call transferAndLock');
 
     const callResult = await like.transferAndLock(accounts[0], balance1, { from: accounts[1] });
     const transferEvent = utils.solidityEvent(callResult, 'Transfer');
