@@ -98,7 +98,7 @@ contract LikeCoin is ERC20 {
 
     function transferAndLock(address _to, uint256 _value) public returns (bool success) {
         require(now < unlockTime);
-        require(msg.sender == crowdsaleAddr);
+        require(msg.sender == crowdsaleAddr || msg.sender == owner);
         require(balances[msg.sender] >= _value);
         require(lockedBalances[_to] + _value > lockedBalances[_to]);
         balances[msg.sender] -= _value;
