@@ -360,7 +360,7 @@ contract('LikeCoin transferAndCall', (accounts) => {
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
-    like.addTransferAndCallWhitelist(mock.address);
+    await like.addTransferAndCallWhitelist(mock.address);
   });
 
   it('should transfer LIKE and call callback in contract', async () => {
@@ -1299,6 +1299,102 @@ contract('LikeCoin delegated switch', (accounts) => {
     await utils.assertSolidityThrow(async () => {
       await like.switchDelegate(false, { from: accounts[0] });
     }, 'Old owner should not be able to switch off delegate before accepting ownership');
+  });
+});
+
+contract('LikeCoin operator', (accounts) => {
+  const initialAmount = coinsToCoinUnits(10000);
+  let like;
+  let mock;
+
+  before(async () => {
+    like = await LikeCoin.new(initialAmount);
+    mock = await TransferAndCallReceiverMock.new(like.address);
+    await like.setOperator(accounts[1]);
+  });
+
+  it('should allow operator to switch delegated', async () => {
+    await like.switchDelegate(false, { from: accounts[1] });
+    await like.switchDelegate(true, { from: accounts[1] });
+
+    await like.setOperator(accounts[2]);
+
+    await utils.assertSolidityThrow(async () => {
+      await like.switchDelegate(false, { from: accounts[1] });
+    }, 'Should forbid old operator to switch off delegated');
+
+    await like.switchDelegate(false, { from: accounts[2] });
+
+    await utils.assertSolidityThrow(async () => {
+      await like.switchDelegate(true, { from: accounts[1] });
+    }, 'Should forbid old operator to switch on delegated');
+
+    await like.switchDelegate(true, { from: accounts[2] });
+  });
+
+  it('should allow operator to add and remove transferAndCall whitelist', async () => {
+    await like.setOperator(accounts[1]);
+    await like.addTransferAndCallWhitelist(mock.address, { from: accounts[1] });
+    await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[1] });
+
+    await like.setOperator(accounts[2]);
+
+    await utils.assertSolidityThrow(async () => {
+      await like.addTransferAndCallWhitelist(mock.address, { from: accounts[1] });
+    }, 'Should forbid old operator to add transferAndCall whiteliat');
+
+    await like.addTransferAndCallWhitelist(mock.address, { from: accounts[2] });
+
+    await utils.assertSolidityThrow(async () => {
+      await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[1] });
+    }, 'Should forbid old operator to remove transferAndCall whiteliat');
+
+    await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[2] });
+  });
+
+  it('should limit operator permission', async () => {
+    await like.setOperator(accounts[1]);
+
+    await utils.assertSolidityThrow(async () => {
+      await like.changeOwner(accounts[2], { from: accounts[1] });
+    }, 'Should forbid operator to change owner');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setOperator(accounts[2], { from: accounts[1] });
+    }, 'Should forbid operator to set operator');
+
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    await utils.assertSolidityThrow(async () => {
+      await like.registerCrowdsales(accounts[2], 1, now + 100000, { from: accounts[1] });
+    }, 'Should forbid operator to register crowdsale');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerContributorPool(accounts[2], 1, { from: accounts[1] });
+    }, 'Should forbid operator to register contributor pool');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerUserGrowthPools([accounts[2]], { from: accounts[1] });
+    }, 'Should forbid operator to register user growth pool');
+  });
+
+  it('should allow operator to call transferAndLock', async () => {
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    await like.registerCrowdsales(accounts[2], 1, now + 100000);
+    await like.transfer(accounts[1], initialAmount.div(10));
+    await like.transfer(accounts[2], initialAmount.div(10));
+
+    await like.transferAndLock(accounts[2], 1, { from: accounts[1] });
+
+    await like.setOperator(accounts[2]);
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferAndLock(accounts[2], 1, { from: accounts[1] });
+    }, 'Should forbid old operator to call transferAndLock');
+
+    await like.transferAndLock(accounts[1], 1, { from: accounts[2] });
+
+    await like.setOperator(accounts[1]);
+    await like.transferAndLock(accounts[2], 1, { from: accounts[1] });
   });
 });
 

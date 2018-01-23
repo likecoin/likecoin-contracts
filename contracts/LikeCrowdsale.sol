@@ -22,6 +22,7 @@ import "./LikeCoin.sol";
 contract LikeCrowdsale {
     address public owner = 0x0;
     address public pendingOwner = 0x0;
+    address public operator = 0x0;
     LikeCoin public like = LikeCoin(0x0);
     uint public start = 0;
     uint public end = 0;
@@ -67,6 +68,12 @@ contract LikeCrowdsale {
         OwnershipChanged(owner);
     }
 
+    function setOperator(address _operator) public {
+        require(msg.sender == owner);
+        require(_operator != operator);
+        operator = _operator;
+    }
+
     function changePrice(uint256 _newCoinsPerEth) public {
         require(msg.sender == owner);
         require(_newCoinsPerEth != coinsPerEth);
@@ -85,7 +92,7 @@ contract LikeCrowdsale {
     }
 
     function registerKYC(address[] _customerAddrs) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         for (uint32 i = 0; i < _customerAddrs.length; ++i) {
             kycDone[_customerAddrs[i]] = true;
             RegisterKYC(_customerAddrs[i]);
@@ -93,7 +100,7 @@ contract LikeCrowdsale {
     }
 
     function registerReferrer(address _addr, address _referrer) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         require(referrer[_addr] == 0x0);
         referrer[_addr] = _referrer;
         RegisterReferrer(_addr, _referrer);
@@ -127,7 +134,7 @@ contract LikeCrowdsale {
 
     function finalize() public {
         require(!finalized);
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         require(now >= start);
         uint256 remainingCoins = like.balanceOf(this);
         require(now >= end || remainingCoins == 0);
