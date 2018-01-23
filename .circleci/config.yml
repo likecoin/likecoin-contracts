@@ -11,18 +11,18 @@ jobs:
           key: like-token-contracts-{{ checksum "package.json" }}
       - run:
           name: Dependencies
-          command: yarn
+          command: npm install
       - run:
           name: Lint
-          command: yarn run lint
+          command: npm run lint
       - run:
           name: Start testrpc server
-          command: yarn run server
+          command: npm run server
           background: true
       - run:
           name: Start test
-          command: yarn test
+          command: npm test
       - save_cache:
           key: like-token-contracts-{{ checksum "package.json" }}
           paths:
-            - "~/.cache/yarn"
+            - "./node_modules"
