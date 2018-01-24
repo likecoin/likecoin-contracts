@@ -33,6 +33,7 @@ contract LikeCoin is ERC20 {
 
     address public owner = 0x0;
     address public pendingOwner = 0x0;
+    address public operator = 0x0;
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
@@ -67,6 +68,12 @@ contract LikeCoin is ERC20 {
         OwnershipChanged(owner);
     }
 
+    function setOperator(address _operator) public {
+        require(msg.sender == owner);
+        require(_operator != operator);
+        operator = _operator;
+    }
+
     function totalSupply() public constant returns (uint256) {
         return supply;
     }
@@ -98,7 +105,7 @@ contract LikeCoin is ERC20 {
 
     function transferAndLock(address _to, uint256 _value) public returns (bool success) {
         require(now < unlockTime);
-        require(msg.sender == crowdsaleAddr || msg.sender == owner);
+        require(msg.sender == crowdsaleAddr || msg.sender == owner || msg.sender == operator);
         require(balances[msg.sender] >= _value);
         require(lockedBalances[_to] + _value > lockedBalances[_to]);
         balances[msg.sender] -= _value;
@@ -234,20 +241,20 @@ contract LikeCoin is ERC20 {
     }
 
     function switchDelegate(bool _allowed) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         require(allowDelegate != _allowed);
         allowDelegate = _allowed;
     }
 
     function addTransferAndCallWhitelist(address _contract) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         require(_isContract(_contract));
         require(!transferAndCallWhitelist[_contract]);
         transferAndCallWhitelist[_contract] = true;
     }
 
     function removeTransferAndCallWhitelist(address _contract) public {
-        require(msg.sender == owner);
+        require(msg.sender == owner || msg.sender == operator);
         require(transferAndCallWhitelist[_contract]);
         delete transferAndCallWhitelist[_contract];
     }

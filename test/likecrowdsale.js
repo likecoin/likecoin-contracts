@@ -644,6 +644,112 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
   });
 });
 
+contract('LikeCoin Crowdsale operator', (accounts) => {
+  let unlockTime;
+  let start;
+  let end;
+  let like;
+  let crowdsale;
+
+  before(async () => {
+    // The blocktime of next block could be affected by snapshot and revert, so mine the next block
+    // immediately by calling testrpcIncreaseTime
+    await utils.testrpcIncreaseTime(1);
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    start = now + 1000;
+    end = start + crowdsaleLength;
+    unlockTime = now + 0xFFFFFFFF;
+    like = await LikeCoin.new(0);
+    crowdsale = await LikeCrowdsale.new(
+      like.address, start, end,
+      10000, 5,
+    );
+    await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime);
+    await crowdsale.setOperator(accounts[1]);
+  });
+
+  it('should limit operator permission', async () => {
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.changeOwner(accounts[2], { from: accounts[1] });
+    }, 'Should forbid operator to change owner');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.setOperator(accounts[2], { from: accounts[1] });
+    }, 'Should forbid operator to set operator');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.changePrice(10001, { from: accounts[1] });
+    }, 'Should forbid operator to change price');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.addPrivateFund(accounts[2], 1, { from: accounts[1] });
+    }, 'Should forbid operator to add private fund');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.transferLike(accounts[2], 1, { from: accounts[1] });
+    }, 'Should forbid operator to transfer LIKE');
+  });
+
+  it('should allow operator to register KYC', async () => {
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    assert.isBelow(now, start, 'Blocktime is already after crowdsale start, please adjust test case');
+    await utils.testrpcIncreaseTime((start - now) + 1);
+
+    await crowdsale.registerKYC([accounts[2]], { from: accounts[1] });
+
+    await crowdsale.setOperator(accounts[2]);
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerKYC([accounts[3]], { from: accounts[1] });
+    }, 'Should forbid old operator to register KYC');
+
+    await crowdsale.registerKYC([accounts[3]], { from: accounts[2] });
+  });
+
+  it('should allow operator to register referrer', async () => {
+    await crowdsale.setOperator(accounts[1]);
+    await crowdsale.registerReferrer(accounts[2], accounts[4], { from: accounts[1] });
+
+    await crowdsale.setOperator(accounts[2]);
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerReferrer(accounts[3], accounts[5], { from: accounts[1] });
+    }, 'Should forbid old operator to register KYC');
+
+    await crowdsale.registerReferrer(accounts[3], accounts[5], { from: accounts[2] });
+  });
+
+  it('should allow operator to call finalize', async () => {
+    await crowdsale.setOperator(accounts[1]);
+    await crowdsale.registerKYC([accounts[0]]);
+    await web3.eth.sendTransaction({
+      from: accounts[0],
+      to: crowdsale.address,
+      value: 1,
+      gas: '200000',
+      gasPrice: 0,
+    });
+
+    const ownerBalanceBefore = web3.eth.getBalance(accounts[0]);
+    const operatorBalanceBefore = web3.eth.getBalance(accounts[1]);
+
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    assert.isBelow(now, end, 'Blocktime is already after crowdsale end, please adjust test case');
+    await utils.testrpcIncreaseTime((end - now) + 1);
+
+    await crowdsale.finalize({ from: accounts[1], gasPrice: 0 });
+
+    assert(web3.eth.getBalance(accounts[0]).eq(ownerBalanceBefore.add(1)), 'Owner did not receive Ether correctly after finalize');
+    assert(web3.eth.getBalance(accounts[1]).eq(operatorBalanceBefore), 'Operator should not receive Ether after finalize');
+  });
+
+  it('should limit operator permission', async () => {
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.transferLike(accounts[2], 1, { from: accounts[1] });
+    }, 'Should forbid operator to transfer LIKE');
+  });
+});
+
 contract('LikeCoin Crowdsale Overflow', () => {
   it('should forbid hardCap which will overflow', async () => {
     // The blocktime of next block could be affected by snapshot and revert, so mine the next block
