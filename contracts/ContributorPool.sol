@@ -159,7 +159,7 @@ contract ContributorPool {
             threshold = setOwnersInfo[id].newThreshold;
             minUsableId = nextId;
             delete setOwnersInfo[id];
-			delete proposals[id];
+            delete proposals[id];
         } else {
             revert();
         }
@@ -172,8 +172,8 @@ contract ContributorPool {
         require(giveInfo[id].to == claimer);
         require(giveInfo[id].unlockTime > 0);
         require(giveInfo[id].unlockTime < now);
-        require(lockedCoin > likeCoin);
         uint256 likeCoin = giveInfo[id].value;
+        require(lockedCoin >= likeCoin);
         delete proposals[id];
         delete giveInfo[id];
         like.transfer(claimer, likeCoin);
