@@ -1341,13 +1341,13 @@ contract('LikeCoin operator', (accounts) => {
 
     await utils.assertSolidityThrow(async () => {
       await like.addTransferAndCallWhitelist(mock.address, { from: accounts[1] });
-    }, 'Should forbid old operator to add transferAndCall whiteliat');
+    }, 'Should forbid old operator to add transferAndCall whitelist');
 
     await like.addTransferAndCallWhitelist(mock.address, { from: accounts[2] });
 
     await utils.assertSolidityThrow(async () => {
       await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[1] });
-    }, 'Should forbid old operator to remove transferAndCall whiteliat');
+    }, 'Should forbid old operator to remove transferAndCall whitelist');
 
     await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[2] });
   });
