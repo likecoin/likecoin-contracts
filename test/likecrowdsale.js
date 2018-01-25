@@ -312,6 +312,8 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
   });
 
   it('should calculate bonus correctly', async () => {
+    await crowdsale.registerKYC([accounts[5], accounts[6], accounts[7], accounts[8]]);
+
     const registerReferrerEvent1 = utils.solidityEvent(await crowdsale.registerReferrer(accounts[3], accounts[7]), 'RegisterReferrer');
     assert.equal(registerReferrerEvent1.args._addr, accounts[3], "registerReferrer event has wrong value on field '_addr'");
     assert.equal(registerReferrerEvent1.args._referrer, accounts[7], "registerReferrer event has wrong value on field '_referrer'");
@@ -372,10 +374,18 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     assert(remaining3.eq(remaining2.sub(account4Coins).sub(account1ReferrerBonus)), 'Wrong remaining coins after accounts[4] buying coins');
   });
 
-  it('should forbid setting another referrer', async () => {
+  it('should restrict referrer', async () => {
     await utils.assertSolidityThrow(async () => {
-      await crowdsale.registerReferrer(accounts[3], accounts[8]);
+      await crowdsale.registerReferrer(accounts[3], accounts[5]);
     }, 'accounts[3] already has referrer, re-register should be forbidden');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerReferrer(accounts[4], accounts[4]);
+    }, 'should forbid setting one as his / her own referrer');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerReferrer(accounts[4], accounts[9]);
+    }, 'should require referrer to finish KYC');
   });
 
   it('should forbid non-owner to set referrer', async () => {
@@ -567,7 +577,7 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
 
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     await utils.testrpcIncreaseTime((start - now) + 1);
-    await crowdsale.registerKYC([accounts[1], accounts[2]]);
+    await crowdsale.registerKYC([accounts[1], accounts[2], accounts[3]]);
     await web3.eth.sendTransaction({
       from: accounts[1],
       to: crowdsale.address,
@@ -704,7 +714,7 @@ contract('LikeCoin Crowdsale operator', (accounts) => {
       await crowdsale.registerKYC([accounts[3]], { from: accounts[1] });
     }, 'Should forbid old operator to register KYC');
 
-    await crowdsale.registerKYC([accounts[3]], { from: accounts[2] });
+    await crowdsale.registerKYC([accounts[3], accounts[4], accounts[5]], { from: accounts[2] });
   });
 
   it('should allow operator to register referrer', async () => {

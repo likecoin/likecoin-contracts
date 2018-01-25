@@ -104,6 +104,9 @@ contract LikeCrowdsale {
     function registerReferrer(address _addr, address _referrer) public {
         require(msg.sender == owner || msg.sender == operator);
         require(referrer[_addr] == 0x0);
+        require(_referrer != 0x0);
+        require(_addr != _referrer);
+        require(kycDone[_referrer]);
         referrer[_addr] = _referrer;
         RegisterReferrer(_addr, _referrer);
     }
