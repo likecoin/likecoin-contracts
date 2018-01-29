@@ -32,10 +32,7 @@ const lockTime = 2 * 86400 * 365; // 2 years
 const contributorAmount = coinsToCoinUnits(200000000);
 const testAmount = coinsToCoinUnits(10);
 
-// story 1
 contract('ContributorPool:give', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
   const giveId1 = []; // acct 1
   const giveId2 = []; // acct 2
   let like;
@@ -44,7 +41,7 @@ contract('ContributorPool:give', (accounts) => {
 
   before(async () => {
     like = await LikeCoin.new(contributorAmount);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
@@ -72,7 +69,7 @@ contract('ContributorPool:give', (accounts) => {
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     // TEST_CONT_0039
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
   it('deploy contributor pool again', async () => {
@@ -83,120 +80,32 @@ contract('ContributorPool:give', (accounts) => {
     }, 'ContributorPool contract should be registered once only');
   });
 
-  it('propose to give LIKE (invalid owner)', async () => {
-    // TEST_CONT_0004
-    // propose to give LIKE to acct 1 by non-owner
-    const amount = testAmount;
-    await utils.assertSolidityThrow(async () => {
-      await cp.proposeGive(accounts[1], amount, { from: accounts[6] });
-    }, 'Should not allow proposal to give coins by non-owner');
-  });
-
-  it('propose to give LIKE (zero value)', async () => {
-    // TEST_CONT_0005
-    // propose to give 0 LIKE to acct 1
+  it('give LIKE (zero value)', async () => {
+    // give 0 LIKE to acct 1
     const amount = 0;
     await utils.assertSolidityThrow(async () => {
-      await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    }, 'Should not propose to give 0 coins');
+      await cp.give(accounts[1], amount);
+    }, 'Should not propose to give 0 LIKE');
   });
 
-  it('confirm to give LIKE (confirm twice)', async () => {
-    // TEST_CONT_0006
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
+  it('give LIKE by non-owner', async () => {
     await utils.assertSolidityThrow(async () => {
-      // confirm a proposal twice
-      await cp.confirmProposal(proposalId, { from: accounts[5] });
-    }, 'Should not allow confirm twice');
+      await cp.give(accounts[1], testAmount, { from: accounts[5] });
+    }, 'Should not allow give LIKE by non-owner');
   });
 
-  it('confirm to give LIKE (confirm by non owner)', async () => {
-    // TEST_CONT_0007
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
+  it('give LIKE (exceed value)', async () => {
     await utils.assertSolidityThrow(async () => {
-      // confirm by non owner
-      await cp.confirmProposal(proposalId, { from: accounts[6] });
-    }, 'Should not allow confirm by non owner');
+      // give (max + 1) LIKE to acct 1
+      await cp.give(accounts[1], contributorAmount.add(1));
+    }, 'Should not give LIKE more than available number');
   });
 
-  it('confirm to give LIKE (exceed confirm threshold)', async () => {
-    // TEST_CONT_0008
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    assert.equal(threshold, 3);
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await utils.assertSolidityThrow(async () => {
-      // confirm a proposal by 4th owner
-      await cp.confirmProposal(proposalId, { from: accounts[2] });
-    }, 'Should not allow confirm exceed threshold');
-  });
-
-  it('execute to give LIKE (exceed value)', async () => {
-    // TEST_CONT_0009
-    const amount = contributorAmount.add(1);
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await utils.assertSolidityThrow(async () => {
-      // execute to give (max + 1) LIKE to acct 1
-      await cp.executeProposal(proposalId, { from: accounts[5] });
-    }, 'Should not give coins more than available number');
-  });
-
-  it('execute to give LIKE (negative value/overflow)', async () => {
-    // TEST_CONT_0010
-    const amount = -1;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
+  it('give LIKE (negative value/overflow)', async () => {
     await utils.assertSolidityThrow(async () => {
       // execute to give -1 LIKE to acct 1
-      await cp.executeProposal(proposalId, { from: accounts[5] });
+      await cp.give(accounts[1], -1);
     }, 'Should not give negative amount');
-  });
-
-  it('execute to give LIKE (not enough confirm)', async () => {
-    // TEST_CONT_0011
-    const amount = 1;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    assert.equal(threshold, 3);
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await utils.assertSolidityThrow(async () => {
-      // execute to give -1 LIKE to acct 1
-      await cp.executeProposal(proposalId, { from: accounts[5] });
-    }, 'Should not allow not enough confirm');
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
-    await like.transfer(cp.address, amount, { from: accounts[0] });
-    airDropAmount = airDropAmount.add(1);
-  });
-
-  it('execute to give LIKE (non owner)', async () => {
-    // TEST_CONT_0012
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await utils.assertSolidityThrow(async () => {
-      // execute to give (max + 1) LIKE to acct 1
-      await cp.executeProposal(proposalId, { from: accounts[6] });
-    }, 'Should not allow non owner to execute');
   });
 
   it('give LIKE (general case)', async () => {
@@ -204,37 +113,25 @@ contract('ContributorPool:give', (accounts) => {
     assert(contributorAmount.eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (i)');
     // give LIKE to acct 1
     const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[1], amount);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
     assert(contributorAmount.sub(testAmount).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (ii)');
-    giveId1.push(proposalId);
+    giveId1.push(id);
     // give LIKE to acct 1
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId2 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId2, { from: accounts[5] });
-    await cp.confirmProposal(proposalId2, { from: accounts[4] });
-    await cp.confirmProposal(proposalId2, { from: accounts[3] });
-    await cp.executeProposal(proposalId2, { from: accounts[5] });
+    await cp.give(accounts[1], amount);
+    const id2 = (await utils.solidityEventPromise(cp.Give())).args._id;
     assert(contributorAmount.sub(testAmount.mul(2)).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (iii)');
     const acctBalance = await like.balanceOf(accounts[1]);
-    assert.equal(acctBalance, 0, '0 units of coins should be in account[1], because not yet claimed');
-    giveId1.push(proposalId2);
+    assert.equal(acctBalance, 0, '0 units of LIKE should be in account[1], because not yet claimed');
+    giveId1.push(id2);
 
     // give LIKE to acct 2
-    await cp.proposeGive(accounts[2], amount, { from: accounts[5] });
-    const proposalId3 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId3, { from: accounts[5] });
-    await cp.confirmProposal(proposalId3, { from: accounts[4] });
-    await cp.confirmProposal(proposalId3, { from: accounts[3] });
-    await cp.executeProposal(proposalId3, { from: accounts[5] });
+    await cp.give(accounts[2], amount);
+    const id3 = (await utils.solidityEventPromise(cp.Give())).args._id;
     const acctBalance2 = await like.balanceOf(accounts[2]);
-    assert.equal(acctBalance2, 0, '0 units of coins should be in account[2], because not yet claimed');
+    assert.equal(acctBalance2, 0, '0 units of LIKE should be in account[2], because not yet claimed');
     assert(contributorAmount.sub(testAmount.mul(3)).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (iv)');
-    giveId2.push(proposalId3);
+    giveId2.push(id3);
   });
 
   it('give LIKE (exceed remaining value)', async () => {
@@ -242,18 +139,13 @@ contract('ContributorPool:give', (accounts) => {
     // give (max - testAmount) LIKE to acct 1
     const remainAmount = await cp.getRemainingLikeCoins();
     const amount = contributorAmount.sub(testAmount.mul(3)).add(1);
-    await cp.proposeGive(accounts[5], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
     await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(proposalId, { from: accounts[5] });
-    }, 'Should not allow to execute, give coins more than remaining available number');
+      await cp.give(accounts[5], amount);
+    }, 'Should not allow give LIKE more than remaining available number');
 
     // add additional likecoin so that is enough for execution.
     await like.transfer(cp.address, 1, { from: accounts[0] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[5], amount);
     // add back likecoin so that remaining likecoin is same as the state before this testcase
     await like.transfer(cp.address, remainAmount, { from: accounts[0] });
     airDropAmount = airDropAmount.add(remainAmount).add(1);
@@ -276,9 +168,9 @@ contract('ContributorPool:give', (accounts) => {
     // acct 3 claims LIKE
     await utils.assertSolidityThrow(async () => {
       await cp.claim(giveId1[0], { from: accounts[3] });
-    }, 'Should not claim like any coins successfully');
+    }, 'Should not claim like any LIKE successfully');
     const acctBalance = await like.balanceOf(accounts[3]);
-    assert.equal(acctBalance, 0, '0 units of coins should be in account[3], because no one give LIKE to this account');
+    assert.equal(acctBalance, 0, '0 units of LIKE should be in account[3], because no one give LIKE to this account');
   });
 
   it('claim LIKE (general case)', async () => {
@@ -286,11 +178,11 @@ contract('ContributorPool:give', (accounts) => {
     // acct 1 claims after 2 years
     await cp.claim(giveId1[0], { from: accounts[1] });
     let acctBalance = await like.balanceOf(accounts[1]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[1]`);
+    assert(testAmount.eq(acctBalance), `${testAmount} units of LIKE should be in account[1]`);
     // acct 2 claims after 2 years
     await cp.claim(giveId2[0], { from: accounts[2] });
     acctBalance = await like.balanceOf(accounts[2]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[2]`);
+    assert(testAmount.eq(acctBalance), `${testAmount} units of LIKE should be in account[2]`);
     assert(contributorAmount.sub(testAmount.mul(3)).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (v)');
     // check balance of contributor pool (note: need to add airdrop amount)
     assert(contributorAmount.add(airDropAmount).sub(testAmount.mul(2)).eq(await like.balanceOf(cp.address)), 'Check contributor pool balance');
@@ -303,21 +195,17 @@ contract('ContributorPool:give', (accounts) => {
       await cp.claim(giveId1[0], { from: accounts[1] });
     }, 'Should not claim LIKE again successfully');
     const acctBalance = await like.balanceOf(accounts[1]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[1]`);
+    assert(testAmount.eq(acctBalance), `${testAmount} units of LIKE should be in account[1]`);
   });
 
   it('give more LIKE and claim', async () => {
     // TEST_CONT_0019
     // give LIKE to acct 1
     const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[1], amount);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
     assert(contributorAmount.sub(testAmount.mul(4)).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (vi)');
-    giveId1.push(proposalId);
+    giveId1.push(id);
     await utils.assertSolidityThrow(async () => {
       await cp.claim(giveId1[2], { from: accounts[1] });
     }, 'Should not claim LIKE before unlock time');
@@ -326,15 +214,12 @@ contract('ContributorPool:give', (accounts) => {
     // acct 1 claims after 2 years
     await cp.claim(giveId1[2], { from: accounts[1] });
     const acctBalance = await like.balanceOf(accounts[1]);
-    assert(testAmount.mul(2).eq(acctBalance), `${testAmount} *2 units of coins should be in account[1]`);
+    assert(testAmount.mul(2).eq(acctBalance), `${testAmount} *2 units of LIKE should be in account[1]`);
     assert(contributorAmount.sub(testAmount.mul(4)).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (vii)');
   });
 });
 
-// story 2
 contract('ContributorPool:give2', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
   const giveId3 = []; // acct 3
   // testrpc seems to have some timing error, 10 seconds difference is acceptable in practice
   const testTime = lockTime - 10;
@@ -344,30 +229,26 @@ contract('ContributorPool:give2', (accounts) => {
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
     // register by owner (acct 0)
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
   it('give max LIKE', async () => {
     // TEST_CONT_0020
     // give max LIKE to acct 3
     const amount = contributorAmount;
-    await cp.proposeGive(accounts[3], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[2] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[3], amount);
     unlockTimestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp + lockTime;
-    giveId3.push(proposalId);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
+    giveId3.push(id);
     const acctBalance = await like.balanceOf(accounts[3]);
-    assert.equal(acctBalance, 0, '0 units of coins should be in account[3]');
+    assert.equal(acctBalance, 0, '0 units of LIKE should be in account[3]');
     assert.equal((await cp.getRemainingLikeCoins()), 0, 'Check LIKE remains. (i)');
   });
 
@@ -380,21 +261,16 @@ contract('ContributorPool:give2', (accounts) => {
     }, 'Should not claim LIKE successfully before unlock time(after 1 year)');
     assert.isBelow(web3.eth.getBlock(web3.eth.blockNumber).timestamp, unlockTimestamp, 'Already on or after unlock time, please check test case');
     const acctBalance = await like.balanceOf(accounts[3]);
-    assert.equal(acctBalance, 0, '0 units of coins should be in account[3]');
+    assert.equal(acctBalance, 0, '0 units of LIKE should be in account[3]');
   });
 
   it('give after giving max LIKE already', async () => {
     // TEST_CONT_0022
     // give 1 LIKE to acct 1
     const amount = 1;
-    await cp.proposeGive(accounts[3], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[2] });
     await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(proposalId, { from: accounts[5] });
-    }, 'Should not give coins because no more available');
+      await cp.give(accounts[3], amount);
+    }, 'Should not give LIKE because no more available');
   });
 
   it('claim after unlock time', async () => {
@@ -404,15 +280,12 @@ contract('ContributorPool:give2', (accounts) => {
     await utils.testrpcIncreaseTime(gap);
     await cp.claim(giveId3[0], { from: accounts[3] });
     const acctBalance = await like.balanceOf(accounts[3]);
-    assert(contributorAmount.eq(acctBalance), `${contributorAmount} units of coins should be in account[3]`);
+    assert(contributorAmount.eq(acctBalance), `${contributorAmount} units of LIKE should be in account[3]`);
     assert.equal((await cp.getRemainingLikeCoins()), 0, 'Check LIKE remains. (ii)');
   });
 });
 
-// story 3
 contract('ContributorPool:give3', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
   const giveId3 = []; // acct 3
   let like;
   let cp;
@@ -420,61 +293,27 @@ contract('ContributorPool:give3', (accounts) => {
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
     // register by owner (acct 0)
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
-  it('claim LIKE before confirm', async () => {
+  it('claim LIKE', async () => {
     // TEST_CONT_0024
     const amount = testAmount;
-    await cp.proposeGive(accounts[3], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    giveId3.push(proposalId);
-    await utils.testrpcIncreaseTime(lockTime + 1);
-    await utils.assertSolidityThrow(async () => {
-      await cp.claim(giveId3[0], { from: accounts[3] });
-    }, 'Should not claim LIKE successfully before confirm');
-    assert(contributorAmount.eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (i)');
-  });
-
-  it('claim LIKE before execute', async () => {
-    // TEST_CONT_0025
-    await cp.confirmProposal(giveId3[0], { from: accounts[5] });
-    await cp.confirmProposal(giveId3[0], { from: accounts[4] });
-    await cp.confirmProposal(giveId3[0], { from: accounts[2] });
-    await utils.assertSolidityThrow(async () => {
-      await cp.claim(giveId3[0], { from: accounts[3] });
-    }, 'Should not claim LIKE successfully before execute');
-    assert(contributorAmount.eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (ii)');
-  });
-
-  it('claim LIKE after execute', async () => {
-    await cp.executeProposal(giveId3[0], { from: accounts[5] });
-    assert(contributorAmount.sub(testAmount).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (iii)');
+    await cp.give(accounts[3], amount);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
+    giveId3.push(id);
+    assert(contributorAmount.sub(testAmount).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (i)');
     // increase 2 year
     await utils.testrpcIncreaseTime(lockTime + 1);
     await cp.claim(giveId3[0], { from: accounts[3] });
-    assert(contributorAmount.sub(testAmount).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (iv)');
-  });
-
-  it('confirm a not existing id', async () => {
-    // TEST_CONT_0056
-    await utils.assertSolidityThrow(async () => {
-      await cp.confirmProposal(notExistId[0], { from: accounts[5] });
-    }, 'Should not confirm not existing id');
-  });
-
-  it('execute a not existing id', async () => {
-    // TEST_CONT_0057
-    await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(notExistId[1], { from: accounts[5] });
-    }, 'Should not execute not existing id');
+    assert(contributorAmount.sub(testAmount).eq(await cp.getRemainingLikeCoins()), 'Check LIKE remains. (ii)');
   });
 
   it('claim a not existing id', async () => {
@@ -485,327 +324,100 @@ contract('ContributorPool:give3', (accounts) => {
   });
 });
 
-// story 4
-contract('ContributorPool:setowners', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
-  const newOwners = [5, 6, 7, 8].map(i => accounts[i]);
-  const newThreshold = 2;
+contract('ContributorPool:transferOwnership', (accounts) => {
+  const oldOwner = accounts[0];
+  const newOwner = accounts[1];
   let like;
   let cp;
   let giveId1;
   let giveId2;
   let giveId3;
-  let proposalId;
-  let invalidProposalId;
-  let unlockTimestamp;
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
     // register by owner (acct 0)
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
-  it('propose,confirm,execute before set owner', async () => {
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    giveId1 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    giveId2 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(giveId2, { from: accounts[5] });
-    await cp.confirmProposal(giveId2, { from: accounts[4] });
-    await cp.confirmProposal(giveId2, { from: accounts[3] });
-
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    giveId3 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(giveId3, { from: accounts[5] });
-    await cp.confirmProposal(giveId3, { from: accounts[4] });
-    await cp.confirmProposal(giveId3, { from: accounts[3] });
-    await cp.executeProposal(giveId3, { from: accounts[5] });
+  it('transfer ownership', async () => {
+    await cp.give(accounts[1], 1);
+    giveId1 = (await utils.solidityEventPromise(cp.Give())).args._id;
+    await cp.transferOwnership(newOwner);
+    await utils.assertSolidityThrow(async () => {
+      await cp.give(accounts[2], 2, { from: newOwner });
+    }, 'Should not give by pending owner');
+    await cp.give(accounts[2], 2);
+    giveId2 = (await utils.solidityEventPromise(cp.Give())).args._id;
   });
 
-  it('propose set owner', async () => {
-    // TEST_CONT_0026
+  it('claim ownership', async () => {
+    await cp.transferOwnership(accounts[3]);
     await utils.assertSolidityThrow(async () => {
-      // set by non owner
-      await cp.proposeSetOwners(newOwners, newThreshold, { from: accounts[6] });
-    }, 'Should not allow proposal to set owners by non-owner');
-    // TEST_CONT_0027
-    // set by owner
-    await cp.proposeSetOwners(newOwners, newThreshold, { from: accounts[5] });
-    proposalId = (await utils.solidityEventPromise(cp.SetOwnersProposal())).args._id;
-
-    // propose a new set owners proposal which should be invalid after changing owners
-    await cp.proposeSetOwners(newOwners, newThreshold, { from: accounts[4] });
-    invalidProposalId = (await utils.solidityEventPromise(cp.SetOwnersProposal())).args._id;
+      await cp.claimOwnership({ from: newOwner });
+    }, 'Should not claim ownership by deprecated pending owner');
+    await cp.transferOwnership(newOwner);
+    await utils.assertSolidityThrow(async () => {
+      await cp.claimOwnership({ from: accounts[3] });
+    }, 'Should not claim ownership by deprecated pending owner');
+    const callResult = await cp.claimOwnership({ from: newOwner });
+    const event = utils.solidityEvent(callResult, 'OwnershipTransferred');
+    assert.equal(event.args.previousOwner, oldOwner, "OwnershipTransferred event has wrong 'previousOwner' field");
+    assert.equal(event.args.newOwner, newOwner, "OwnershipTransferred event has wrong 'newOwner' field");
+    await utils.assertSolidityThrow(async () => {
+      await cp.give(accounts[3], 3);
+    }, 'Should not give by old owner');
+    await cp.give(accounts[3], 3, { from: newOwner });
+    giveId3 = (await utils.solidityEventPromise(cp.Give())).args._id;
+    await utils.assertSolidityThrow(async () => {
+      await cp.transferOwnership(oldOwner);
+    }, 'Should not transfer ownership by old owner');
+    await cp.transferOwnership(oldOwner, { from: newOwner });
   });
 
-  it('confirm set owner', async () => {
-    // TEST_CONT_0028
-    await utils.assertSolidityThrow(async () => {
-      // confirm by non owner
-      await cp.confirmProposal(proposalId, { from: accounts[6] });
-    }, 'Should not allow confirm to set owners by non-owner');
-    // TEST_CONT_0029
-    // confirm by owner
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-  });
-
-  it('execute set owner', async () => {
-    // TEST_CONT_0030
-    await utils.assertSolidityThrow(async () => {
-      // execute by non owner
-      await cp.executeProposal(proposalId, { from: accounts[6] });
-    }, 'Should not allow confirm to set owners by non-owner');
-    // TEST_CONT_0031
-    // execute by owner
-    await cp.executeProposal(proposalId, { from: accounts[5] });
-  });
-
-  it('confirm, execute a proposal that is before execution of set owners', async () => {
-    // TEST_CONT_0059
-    await utils.assertSolidityThrow(async () => {
-      // confirm by non owner
-      await cp.confirmProposal(invalidProposalId, { from: accounts[5] });
-    }, 'Should not allow confirm id before execution of set owners');
-    await utils.assertSolidityThrow(async () => {
-      // confirm by non owner
-      await cp.confirmProposal(invalidProposalId, { from: accounts[6] });
-    }, 'Should not allow confirm id before execution of set owners');
-    await utils.assertSolidityThrow(async () => {
-      // execute by non owner
-      await cp.executeProposal(invalidProposalId, { from: accounts[5] });
-    }, 'Should not allow execute id before execution of set owners');
-    await utils.assertSolidityThrow(async () => {
-      // execute by non owner
-      await cp.executeProposal(invalidProposalId, { from: accounts[6] });
-    }, 'Should not allow execute id before execution of set owners');
-  });
-
-  it('check propose, confirm, execute after set owner', async () => {
-    // TEST_CONT_0032
-    await utils.assertSolidityThrow(async () => {
-      await cp.confirmProposal(giveId1, { from: accounts[6] });
-    }, 'Should not confirm the void proposal after set owner');
-    await utils.assertSolidityThrow(async () => {
-      await cp.confirmProposal(giveId1, { from: accounts[5] });
-    }, 'Should not confirm the void proposal after set owner 2');
-
-    // TEST_CONT_0033
-    await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(giveId2, { from: accounts[6] });
-    }, 'Should not execute the void proposal after set owner');
-    await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(giveId2, { from: accounts[5] });
-    }, 'Should not execute the void proposal after set owner 2');
-
-    // TEST_CONT_0034
-    unlockTimestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp + lockTime;
-    const gap = (unlockTimestamp - web3.eth.getBlock(web3.eth.blockNumber).timestamp) + 1;
-    await utils.testrpcIncreaseTime(gap);
-    await cp.claim(giveId3, { from: accounts[1] });
-    const acctBalance = await like.balanceOf(accounts[1]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[1]`);
+  it('check that all gives are valid', async () => {
+    await utils.testrpcIncreaseTime(lockTime);
+    await cp.claim(giveId1, { from: accounts[1] });
+    assert((await like.balanceOf(accounts[1])).eq(1), '1 units of LIKE should be in account[1]');
+    await cp.claim(giveId2, { from: accounts[2] });
+    assert((await like.balanceOf(accounts[2])).eq(2), '2 units of LIKE should be in account[2]');
+    await cp.claim(giveId3, { from: accounts[3] });
+    assert((await like.balanceOf(accounts[3])).eq(3), '3 units of LIKE should be in account[3]');
   });
 });
 
-// story 5
-contract('ContributorPool:setowners2', (accounts) => {
-  const owners = [1, 2].map(i => accounts[i]);
-  const threshold = 2;
-  let like;
-  let cp;
-
-  before(async () => {
-    like = await LikeCoin.new(0);
-  });
-
-  it('test parms on deploying contributor pool 1', async () => {
-    // TEST_CONT_0040
-    // deploy with 0 owners
-    const invalidOwners = [];
-    await utils.assertSolidityThrow(async () => {
-      cp = await ContributorPool.new(like.address, invalidOwners, lockTime, 0);
-    }, 'ContributorPool contract should be deployed with at least 1 owner');
-  });
-
-  it('deploying contributor pool with duplicate address', async () => {
-    // TEST_CONT_0054
-    // deploy with 0 owners
-    const invalidOwners = [accounts[1], accounts[1]];
-    await utils.assertSolidityThrow(async () => {
-      cp = await ContributorPool.new(like.address, invalidOwners, lockTime, threshold);
-    }, 'ContributorPool contract should not be deployed with duplicate owners');
-  });
-
-  it('test parms on deploying contributor pool 2', async () => {
-    // TEST_CONT_0041
-    // threshold > # of owners
-    const invalidThreshold = 3;
-    await utils.assertSolidityThrow(async () => {
-      cp = await ContributorPool.new(like.address, owners, lockTime, invalidThreshold);
-    }, 'Threshold should not be greater than number of owners');
-  });
-
-  it('test parms on deploying contributor pool 3', async () => {
-    // TEST_CONT_0042
-    // threshold == 0
-    const invalidThreshold = 0;
-    await utils.assertSolidityThrow(async () => {
-      cp = await ContributorPool.new(like.address, owners, lockTime, invalidThreshold);
-    }, 'Threshold should not be 0');
-  });
-
-  it('normal deployment constructor', async () => {
-    // TEST_CONT_0043
-    // threshold == # of owners
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
-    await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
-    const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
-  });
-});
-
-// story 6
-contract('ContributorPool:setowners3', (accounts) => {
-  const owners = [1, 2].map(i => accounts[i]);
-  const threshold = 1;
-  let like;
-  let cp;
-
-  before(async () => {
-    like = await LikeCoin.new(0);
-  });
-
-  it('normal deployment constructor', async () => {
-    // TEST_CONT_0044
-    // threshold == # of owners / 2
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
-    await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
-    const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
-  });
-
-  it('propose with invalid owners param 1', async () => {
-    // TEST_CONT_0045
-    // 0 owners
-    const invalidOwners = [];
-    await utils.assertSolidityThrow(async () => {
-      await cp.proposeSetOwners(invalidOwners, 0, { from: accounts[1] });
-    }, 'Should not allow proposal to set 0 owners');
-  });
-
-  it('propose with invalid owners param 2', async () => {
-    // TEST_CONT_0046
-    // threshold > # of owners
-    const invalidThreshold = 3;
-    await utils.assertSolidityThrow(async () => {
-      await cp.proposeSetOwners(owners, invalidThreshold, { from: accounts[1] });
-    }, 'Should not allow proposal that threshold is greater than number of owners');
-  });
-
-  it('propose with invalid owners param 3', async () => {
-    // TEST_CONT_0047
-    // threshold == 0
-    const invalidThreshold = 0;
-    await utils.assertSolidityThrow(async () => {
-      await cp.proposeSetOwners(owners, invalidThreshold, { from: accounts[1] });
-    }, 'Should not allow proposal that threshold is 0');
-  });
-
-  it('propose with edge-case owners param', async () => {
-    // TEST_CONT_0048
-    // threshold == # of owners
-    let newThreshold = 2;
-    await cp.proposeSetOwners(owners, newThreshold, { from: accounts[1] });
-
-    // TEST_CONT_0049
-    // threshold == # of owners / 2
-    newThreshold = 1;
-    await cp.proposeSetOwners(owners, newThreshold, { from: accounts[1] });
-  });
-
-  it('propose with duplicate owner address', async () => {
-    // TEST_CONT_0055
-    // duplicate owners
-    const invalidOwners = [accounts[1], accounts[1]];
-    await utils.assertSolidityThrow(async () => {
-      await cp.proposeSetOwners(invalidOwners, 1, { from: accounts[1] });
-    }, 'Should not allow proposal that owners are duplicate');
-  });
-});
-
-// story 7
 contract('ContributorPool:give4', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
   let like;
   let cp;
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
-  it('execute after rejecting exceeds confirm', async () => {
-    const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    assert.equal(threshold, 3);
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await utils.assertSolidityThrow(async () => {
-      // confirm a proposal by 4th owner
-      await cp.confirmProposal(proposalId, { from: accounts[2] });
-    }, 'Should not allow confirm exceed threshold');
-
-    // TEST_CONT_0050
-    // still can execute the proposal
-    await cp.executeProposal(proposalId, { from: accounts[5] });
-  });
-
-  it('mixed actions and execute two proposals that exceed amount in total', async () => {
-    // TEST_CONT_0051
+  it('make 2 give that exceed amount in total', async () => {
     // amount + amount2 > total LIKE available
     const amount = testAmount;
     const amount2 = contributorAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.proposeGive(accounts[2], amount2, { from: accounts[5] });
-    const proposalId2 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId2, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId2, { from: accounts[3] });
-    await cp.confirmProposal(proposalId2, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[1], amount);
     await utils.assertSolidityThrow(async () => {
-      await cp.executeProposal(proposalId2, { from: accounts[5] });
-    }, 'Should not allow to execute as there is not enough LIKE.');
+      await cp.give(accounts[2], amount2);
+    }, 'Should not allow to give as there is not enough LIKE.');
   });
 });
 
-// story 8
 contract('ContributorPool:give5', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
   const testTime = 86400 * 365;
   let like;
   let cp;
@@ -813,93 +425,68 @@ contract('ContributorPool:give5', (accounts) => {
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('deploy contributor pool', async () => {
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const cpBalance = await like.balanceOf(cp.address);
-    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of coins should be put in cp contract`);
+    assert(contributorAmount.eq(cpBalance), `${contributorAmount} units of LIKE should be put in cp contract`);
   });
 
   it('mixed actions and execute after someone claimed', async () => {
     // TEST_CONT_0052
     const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.proposeGive(accounts[2], amount, { from: accounts[5] });
-    const proposalId2 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId2, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId2, { from: accounts[3] });
-    await cp.confirmProposal(proposalId2, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    // execute 1st proposal
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[1], amount);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
     // increase time
     await utils.testrpcIncreaseTime(lockTime + 1);
+    await cp.give(accounts[2], amount);
+    const id2 = (await utils.solidityEventPromise(cp.Give())).args._id;
     // claim 1st give
-    await cp.claim(proposalId, { from: accounts[1] });
+    await cp.claim(id, { from: accounts[1] });
     const acctBalance = await like.balanceOf(accounts[1]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[1]`);
-    // execute 2nd proposal after 1st give
-    await cp.executeProposal(proposalId2, { from: accounts[5] });
+    assert(testAmount.eq(acctBalance), `${testAmount} units of LIKE should be in account[1]`);
     // increase time
     await utils.testrpcIncreaseTime(lockTime + 1);
     // claim 2nd give
-    await cp.claim(proposalId2, { from: accounts[2] });
+    await cp.claim(id2, { from: accounts[2] });
     const acctBalance2 = await like.balanceOf(accounts[1]);
-    assert(testAmount.eq(acctBalance2), `${testAmount} units of coins should be in account[2]`);
+    assert(testAmount.eq(acctBalance2), `${testAmount} units of LIKE should be in account[2]`);
   });
 
   it('mixed actions and execute at separate time but claim both, one is after unlock time one is not', async () => {
     // TEST_CONT_0053
     const amount = testAmount;
-    await cp.proposeGive(accounts[3], amount, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    await cp.proposeGive(accounts[4], amount, { from: accounts[5] });
-    const proposalId2 = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    await cp.confirmProposal(proposalId2, { from: accounts[5] });
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    await cp.confirmProposal(proposalId2, { from: accounts[3] });
-    await cp.confirmProposal(proposalId2, { from: accounts[4] });
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    // execute 1st proposal
-    await cp.executeProposal(proposalId, { from: accounts[5] });
+    await cp.give(accounts[3], amount);
+    const id = (await utils.solidityEventPromise(cp.Give())).args._id;
     unlockTimestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp + lockTime;
     // increase 1 year time
     await utils.testrpcIncreaseTime(testTime + 1);
-    // execute 2nd proposal
-    await cp.executeProposal(proposalId2, { from: accounts[5] });
+    await cp.give(accounts[4], amount);
+    const id2 = (await utils.solidityEventPromise(cp.Give())).args._id;
     // increase 1 year time
     const gap = (unlockTimestamp - web3.eth.getBlock(web3.eth.blockNumber).timestamp) + 1;
     await utils.testrpcIncreaseTime(gap);
     // claim 1st give
-    await cp.claim(proposalId, { from: accounts[3] });
+    await cp.claim(id, { from: accounts[3] });
     const acctBalance = await like.balanceOf(accounts[3]);
-    assert(testAmount.eq(acctBalance), `${testAmount} units of coins should be in account[1]`);
+    assert(testAmount.eq(acctBalance), `${testAmount} units of LIKE should be in account[1]`);
     await utils.assertSolidityThrow(async () => {
       // fail to claim 2nd give
-      await cp.claim(proposalId2, { from: accounts[4] });
-    }, 'Should not give coins because not pass unlock time');
+      await cp.claim(id2, { from: accounts[4] });
+    }, 'Should not give LIKE because not pass unlock time');
   });
 });
 
-// story 8
 contract('ContributorEvent', (accounts) => {
-  const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
-  const threshold = 3;
-  const newOwners = [5, 6, 7, 8].map(i => accounts[i]);
-  const newThreshold = 2;
   const giveId1 = []; // acct 1
   let like;
   let cp;
 
   before(async () => {
     like = await LikeCoin.new(0);
-    cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
+    cp = await ContributorPool.new(like.address, lockTime);
   });
 
   it('should emit Transfer event, from like contract to contributorpool contract', async () => {
@@ -912,63 +499,16 @@ contract('ContributorEvent', (accounts) => {
     assert(contributorAmount.eq(event.args.value), "Transfer event has wrong value on field 'value'");
   });
 
-  it('should emit Set owners event', async () => {
-    // TEST_CONT_0036
-    await cp.proposeSetOwners(newOwners, newThreshold, { from: accounts[5] });
-    const proposalId = (await utils.solidityEventPromise(cp.SetOwnersProposal())).args._id;
-    let event = await utils.solidityEventPromise(cp.SetOwnersProposal());
-    assert(event.args._id.eq(proposalId), "SetOwnersProposal event has wrong value on field '_id'");
-    assert.equal(event.args._proposer, accounts[5], "SetOwnersProposal event has wrong value on field '_proposer'");
-    for (let i = 0; i < newOwners.length; i += 1) {
-      assert.equal(event.args._newOwners[i], newOwners[i], `SetOwnersProposal event has wrong value on field _newOwners[${i}]`);
-    }
-    assert.equal(event.args._newThreshold, newThreshold, "SetOwnersProposal event has wrong value on field '_newThreshold'");
-
-    await cp.confirmProposal(proposalId, { from: accounts[5] });
-    event = await utils.solidityEventPromise(cp.ProposalConfirmation());
-    assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
-    assert.equal(event.args._confirmer, accounts[5], "ProposalConfirmation event has wrong value on field '_confirmer'");
-    await cp.confirmProposal(proposalId, { from: accounts[4] });
-    event = await utils.solidityEventPromise(cp.ProposalConfirmation());
-    assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
-    assert.equal(event.args._confirmer, accounts[4], "ProposalConfirmation event has wrong value on field '_confirmer'");
-    await cp.confirmProposal(proposalId, { from: accounts[3] });
-    event = await utils.solidityEventPromise(cp.ProposalConfirmation());
-    assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
-    assert.equal(event.args._confirmer, accounts[3], "ProposalConfirmation event has wrong value on field '_confirmer'");
-
-    await cp.executeProposal(proposalId, { from: accounts[5] });
-    event = await utils.solidityEventPromise(cp.ProposalExecution());
-    assert(event.args._id.eq(proposalId), "ProposalExecution event has wrong value on field '_id'");
-    assert.equal(event.args._executer, accounts[5], "ProposalExecution event has wrong value on field '_executer'");
-  });
-
   it('should emit Give event, from contributorpool contract to account', async () => {
     // TEST_CONT_0037
     // give LIKE to acct 1
     const amount = testAmount;
-    await cp.proposeGive(accounts[1], amount, { from: accounts[6] });
-    const proposalId = (await utils.solidityEventPromise(cp.GiveProposal())).args._id;
-    let event = await utils.solidityEventPromise(cp.GiveProposal());
-    assert(event.args._id.eq(proposalId), "Give Proposal event has wrong value on field '_id'");
-    assert.equal(event.args._proposer, accounts[6], "Give Proposal event has wrong value on field '_proposer'");
-    assert.equal(event.args._to, accounts[1], "Give Proposal event has wrong value on field '_to'");
-    assert(amount.eq(event.args._value), "Give Proposal event has wrong value on field '_value'");
-
-    await cp.confirmProposal(proposalId, { from: accounts[6] });
-    event = await utils.solidityEventPromise(cp.ProposalConfirmation());
-    assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
-    assert.equal(event.args._confirmer, accounts[6], "ProposalConfirmation event has wrong value on field '_confirmer'");
-    await cp.confirmProposal(proposalId, { from: accounts[7] });
-    event = await utils.solidityEventPromise(cp.ProposalConfirmation());
-    assert(event.args._id.eq(proposalId), "ProposalConfirmation event has wrong value on field '_id'");
-    assert.equal(event.args._confirmer, accounts[7], "ProposalConfirmation event has wrong value on field '_confirmer'");
-
-    await cp.executeProposal(proposalId, { from: accounts[6] });
-    event = await utils.solidityEventPromise(cp.ProposalExecution());
-    assert(event.args._id.eq(proposalId), "ProposalExecution event has wrong value on field '_id'");
-    assert.equal(event.args._executer, accounts[6], "ProposalExecution event has wrong value on field '_executer'");
-    giveId1.push(proposalId);
+    await cp.give(accounts[1], amount);
+    const event = await utils.solidityEventPromise(cp.Give());
+    const id = event.args._id;
+    assert.equal(event.args._to, accounts[1], "Give event has wrong value on field '_to'");
+    assert(amount.eq(event.args._value), "Give event has wrong value on field '_value'");
+    giveId1.push(id);
   });
 
   // event transfer likecoin from contributorpool contract to account
