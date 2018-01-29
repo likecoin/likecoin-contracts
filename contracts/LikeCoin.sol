@@ -17,10 +17,14 @@
 
 pragma solidity ^0.4.18;
 
-import "./ERC20.sol";
+import "zeppelin-solidity/contracts/math/SafeMath.sol";
+import "zeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "./TransferAndCallReceiver.sol";
+import "./HasOperator.sol";
 
-contract LikeCoin is ERC20 {
+contract LikeCoin is ERC20, HasOperator {
+    using SafeMath for uint256;
+
     string constant public name = "LikeCoin";
     string constant public symbol = "LIKE";
 
@@ -31,9 +35,6 @@ contract LikeCoin is ERC20 {
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
 
-    address public owner = 0x0;
-    address public pendingOwner = 0x0;
-    address public operator = 0x0;
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
     address[] public userGrowthPoolAddrs;
@@ -46,32 +47,11 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) public transferAndCallWhitelist;
 
     event Lock(address indexed _addr, uint256 _value);
-    event OwnershipChanged(address _newOwner);
 
     function LikeCoin(uint256 _initialSupply) public {
-        owner = msg.sender;
         supply = _initialSupply;
         balances[owner] = _initialSupply;
         Transfer(0x0, owner, _initialSupply);
-    }
-
-    function changeOwner(address _pendingOwner) public {
-        require(msg.sender == owner);
-        require(_pendingOwner != owner);
-        pendingOwner = _pendingOwner;
-    }
-
-    function acceptOwnership() public {
-        require(msg.sender == pendingOwner);
-        owner = pendingOwner;
-        pendingOwner = 0x0;
-        OwnershipChanged(owner);
-    }
-
-    function setOperator(address _operator) public {
-        require(msg.sender == owner);
-        require(_operator != operator);
-        operator = _operator;
     }
 
     function totalSupply() public constant returns (uint256) {
@@ -84,17 +64,15 @@ contract LikeCoin is ERC20 {
 
     function _tryUnlockBalance(address _from) internal {
         if (unlockTime != 0 && now >= unlockTime && lockedBalances[_from] > 0) {
-            balances[_from] += lockedBalances[_from];
+            balances[_from] = balances[_from].add(lockedBalances[_from]);
             delete lockedBalances[_from];
         }
     }
 
     function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
         _tryUnlockBalance(_from);
-        require(balances[_from] >= _value);
-        require(balances[_to] + _value >= balances[_to]);
-        balances[_from] -= _value;
-        balances[_to] += _value;
+        balances[_from] = balances[_from].sub(_value);
+        balances[_to] = balances[_to].add(_value);
         Transfer(_from, _to, _value);
         return true;
     }
@@ -107,9 +85,8 @@ contract LikeCoin is ERC20 {
         require(now < unlockTime);
         require(msg.sender == crowdsaleAddr || msg.sender == owner || msg.sender == operator);
         require(balances[msg.sender] >= _value);
-        require(lockedBalances[_to] + _value > lockedBalances[_to]);
-        balances[msg.sender] -= _value;
-        lockedBalances[_to] += _value;
+        balances[msg.sender] = balances[msg.sender].sub(_value);
+        lockedBalances[_to] = lockedBalances[_to].add(_value);
         Transfer(msg.sender, _to, _value);
         Lock(_to, _value);
         return true;
@@ -130,12 +107,8 @@ contract LikeCoin is ERC20 {
         for (uint i = 0; i < _addrs.length; ++i) {
             address addr = _addrs[i];
             uint256 value = _values[i];
-            uint256 balance = balances[addr];
-            require(balance + value >= balance);
-            require(total + value >= total);
-            balance += value;
-            total += value;
-            balances[addr] = balance;
+            balances[addr] = balances[addr].add(value);
+            total = total.add(value);
             Transfer(_from, addr, value);
         }
         require(balances[_from] >= total);
@@ -299,21 +272,18 @@ contract LikeCoin is ERC20 {
         return _transferMultiple(_from, _addrs, _values);
     }
 
-    function switchDelegate(bool _allowed) public {
-        require(msg.sender == owner || msg.sender == operator);
+    function switchDelegate(bool _allowed) ownerOrOperator public {
         require(allowDelegate != _allowed);
         allowDelegate = _allowed;
     }
 
-    function addTransferAndCallWhitelist(address _contract) public {
-        require(msg.sender == owner || msg.sender == operator);
+    function addTransferAndCallWhitelist(address _contract) ownerOrOperator public {
         require(_isContract(_contract));
         require(!transferAndCallWhitelist[_contract]);
         transferAndCallWhitelist[_contract] = true;
     }
 
-    function removeTransferAndCallWhitelist(address _contract) public {
-        require(msg.sender == owner || msg.sender == operator);
+    function removeTransferAndCallWhitelist(address _contract) ownerOrOperator public {
         require(transferAndCallWhitelist[_contract]);
         delete transferAndCallWhitelist[_contract];
     }
@@ -329,39 +299,34 @@ contract LikeCoin is ERC20 {
     }
 
     function burn(uint256 _value) public {
-        require(supply >= _value);
-        require(balances[msg.sender] >= _value);
-        balances[msg.sender] -= _value;
-        supply -= _value;
+        balances[msg.sender] = balances[msg.sender].sub(_value);
+        supply = supply.sub(_value);
         Transfer(msg.sender, 0x0, _value);
     }
 
-    function registerCrowdsales(address _crowdsaleAddr, uint256 _value, uint256 _privateFundUnlockTime) public {
-        require(msg.sender == owner);
+    function registerCrowdsales(address _crowdsaleAddr, uint256 _value, uint256 _privateFundUnlockTime) onlyOwner public {
         require(crowdsaleAddr == 0x0);
         require(_crowdsaleAddr != 0x0);
         require(_privateFundUnlockTime > now);
-        require(supply + _value > supply);
+        require(_value != 0);
         unlockTime = _privateFundUnlockTime;
         crowdsaleAddr = _crowdsaleAddr;
-        supply += _value;
+        supply = supply.add(_value);
         balances[_crowdsaleAddr] += _value;
         Transfer(0x0, crowdsaleAddr, _value);
     }
 
-    function registerContributorPool(address _contributorPoolAddr, uint256 _value) public {
-        require(msg.sender == owner);
+    function registerContributorPool(address _contributorPoolAddr, uint256 _value) onlyOwner public {
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
-        require(supply + _value > supply);
+        require(_value != 0);
         contributorPoolAddr = _contributorPoolAddr;
-        supply += _value;
+        supply = supply.add(_value);
         balances[contributorPoolAddr] += _value;
         Transfer(0x0, contributorPoolAddr, _value);
     }
 
-    function registerUserGrowthPools(address[] _poolAddrs) public {
-        require(msg.sender == owner);
+    function registerUserGrowthPools(address[] _poolAddrs) onlyOwner public {
         require(userGrowthPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
         for (uint i = 0; i < _poolAddrs.length; ++i) {
@@ -373,10 +338,10 @@ contract LikeCoin is ERC20 {
     function mintForUserGrowthPool(uint256 _value) public {
         require(isUserGrowthPool[msg.sender]);
         require(!userGrowthPoolMinted[msg.sender]);
-        require(supply + _value > supply);
+        require(_value != 0);
         userGrowthPoolMinted[msg.sender] = true;
-        supply += _value;
-        balances[msg.sender] += _value;
+        supply = supply.add(_value);
+        balances[msg.sender] = balances[msg.sender].add(_value);
         Transfer(0x0, msg.sender, _value);
     }
 }

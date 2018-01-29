@@ -102,9 +102,9 @@ contract('LikeCoin Basic', (accounts) => {
 
     const callResult = await like.transfer(accounts[1], transferAmount, { from: accounts[0] });
     const event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(transferAmount), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[1], "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(transferAmount), "Transfer event has wrong value on field 'value'");
 
     const endingBalance0 = (await like.balanceOf(accounts[0]));
     const endingBalance1 = (await like.balanceOf(accounts[1]));
@@ -131,9 +131,9 @@ contract('LikeCoin Basic', (accounts) => {
 
     let callResult = await like.approve(accounts[1], allowance, { from: accounts[0] });
     let event = utils.solidityEvent(callResult, 'Approval');
-    assert.equal(event.args._owner, accounts[0], "Approval event has wrong value on field '_owner'");
-    assert.equal(event.args._spender, accounts[1], "Approval event has wrong value on field '_spender'");
-    assert(event.args._value.eq(allowance), "Approval event has wrong value on field '_value'");
+    assert.equal(event.args.owner, accounts[0], "Approval event has wrong value on field 'owner'");
+    assert.equal(event.args.spender, accounts[1], "Approval event has wrong value on field 'spender'");
+    assert(event.args.value.eq(allowance), "Approval event has wrong value on field 'value'");
 
     const allowanceOf1On0 = (await like.allowance(accounts[0], accounts[1]));
     assert(allowanceOf1On0.eq(allowance), "Allowance wasn't correctly set");
@@ -141,9 +141,9 @@ contract('LikeCoin Basic', (accounts) => {
     callResult =
       await like.transferFrom(accounts[0], accounts[2], transferAmount, { from: accounts[1] });
     event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[2], "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(transferAmount), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[2], "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(transferAmount), "Transfer event has wrong value on field 'value'");
 
     const endingBalance0 = (await like.balanceOf(accounts[0]));
     const endingBalance1 = (await like.balanceOf(accounts[1]));
@@ -239,9 +239,9 @@ contract('LikeCoin Basic', (accounts) => {
 
     const callResult = await like.burn(toBurn, { from: accounts[0] });
     const event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, 0x0, "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(toBurn), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, 0x0, "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(toBurn), "Transfer event has wrong value on field 'value'");
 
     assert((await like.balanceOf(accounts[0])).eq(balance0Before.sub(toBurn)), 'Wrong amount of coins remaining after burning');
     assert((await like.totalSupply()).eq(supplyBefore.sub(toBurn)), 'Wrong amount of supply remaining after burning');
@@ -263,9 +263,9 @@ contract('LikeCoin Basic', (accounts) => {
 
     const callResult = await like.transferAndLock(accounts[0], balance1, { from: accounts[1] });
     const transferEvent = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(transferEvent.args._from, accounts[1], "Transfer event has wrong value on field '_from'");
-    assert.equal(transferEvent.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-    assert(transferEvent.args._value.eq(balance1), "Transfer event has wrong value on field '_value'");
+    assert.equal(transferEvent.args.from, accounts[1], "Transfer event has wrong value on field 'from'");
+    assert.equal(transferEvent.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert(transferEvent.args.value.eq(balance1), "Transfer event has wrong value on field 'value'");
     const lockEvent = utils.solidityEvent(callResult, 'Lock');
     assert.equal(lockEvent.args._addr, accounts[0], "Lock event has wrong value on field '_addr'");
     assert(lockEvent.args._value.eq(balance1), "Lock event has wrong value on field '_value'");
@@ -316,11 +316,11 @@ contract('LikeCoin transferMultiple', (accounts) => {
 
     for (let i = 0; i < addrs.length; i += 1) {
       const target = addrs[i];
-      const events = logs.filter(log => log.args._to === target);
+      const events = logs.filter(log => log.args.to === target);
       assert.equal(events.length, 1, `Wrong number of Transfer events for ${addrs[i]}`);
       const event = events[0];
-      assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-      assert(event.args._value.eq(values[i]), "Transfer event has wrong value on field '_value'");
+      assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+      assert(event.args.value.eq(values[i]), "Transfer event has wrong value on field 'value'");
     }
 
     for (let i = 0; i < addrs.length; i += 1) {
@@ -384,17 +384,17 @@ contract('LikeCoin transferAndCall', (accounts) => {
     const logs = callResult.logs.filter(log => log.event === 'Transfer');
     assert.equal(logs.length, 2, 'Wrong number of Transfer events');
 
-    let events = logs.filter(log => log.args._to === to);
+    let events = logs.filter(log => log.args.to === to);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferAndCall receiver contract');
     let event = events[0];
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(value), "Transfer event has wrong value on field 'value'");
 
-    events = logs.filter(log => log.args._to === '0x1024102410241024102410241024102410241024');
+    events = logs.filter(log => log.args.to === '0x1024102410241024102410241024102410241024');
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferAndCall contract callback');
     [event] = events;
-    assert.equal(event.args._from, to, "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, to, "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(value), "Transfer event has wrong value on field 'value'");
 
     assert(await like.balanceOf(accounts[0]), initialAmount.sub(value), 'Wrong sender balance after transferAndCall');
     assert(await like.balanceOf(to), 0, 'Wrong receiver balance after transferAndCall');
@@ -452,10 +452,10 @@ contract('LikeCoin transferAndCall', (accounts) => {
     }, 'Non-owners should not be able to remove contracts from whitelist');
 
     await utils.assertSolidityThrow(async () => {
-      await like.changeOwner(accounts[1], { from: accounts[2] });
+      await like.transferOwnership(accounts[1], { from: accounts[2] });
     }, 'Non-owners should not be able to change owner');
 
-    await like.changeOwner(accounts[1], { from: accounts[0] });
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[1] });
     }, 'Pending owner should not be able to remove contracts from whitelist before accepting ownership');
@@ -466,9 +466,9 @@ contract('LikeCoin transferAndCall', (accounts) => {
     }, 'Pending owner should not be able to add contracts into whitelist before accepting ownership');
 
     await utils.assertSolidityThrow(async () => {
-      await like.acceptOwnership({ from: accounts[2] });
+      await like.claimOwnership({ from: accounts[2] });
     }, 'Only pending owner can accept ownership');
-    await like.acceptOwnership({ from: accounts[1] });
+    await like.claimOwnership({ from: accounts[1] });
     await like.addTransferAndCallWhitelist(mock.address, { from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[0] });
@@ -521,19 +521,19 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const logs = callResult.logs.filter(log => log.event === 'Transfer');
     assert.equal(logs.length, addrs.length + 1, 'Wrong number of Transfer events');
 
-    const events = logs.filter(log => log.args._to === caller);
+    const events = logs.filter(log => log.args.to === caller);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for caller');
     const event = events[0];
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(claimedReward), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(claimedReward), "Transfer event has wrong value on field 'value'");
 
     for (let i = 0; i < addrs.length; i += 1) {
       const target = addrs[i];
-      const likeEvents = logs.filter(log => log.args._to === target);
+      const likeEvents = logs.filter(log => log.args.to === target);
       assert.equal(likeEvents.length, 1, `Wrong number of Transfer events for ${addrs[i]}`);
       const [likeEvent] = likeEvents;
-      assert.equal(likeEvent.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-      assert(likeEvent.args._value.eq(values[i]), "Transfer event has wrong value on field '_value'");
+      assert.equal(likeEvent.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+      assert(likeEvent.args.value.eq(values[i]), "Transfer event has wrong value on field 'value'");
     }
 
     assert((await like.balanceOf(caller)).eq(claimedReward), 'Caller owns wrong amount of coins after tranferMultiple');
@@ -854,17 +854,17 @@ contract('LikeCoin transferDelegated', (accounts) => {
     const logs = callResult.logs.filter(log => log.event === 'Transfer');
     assert.equal(logs.length, 2, 'Wrong number of Transfer events');
 
-    let events = logs.filter(log => log.args._to === to);
+    let events = logs.filter(log => log.args.to === to);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferDelegated receiver');
     let event = events[0];
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(value), "Transfer event has wrong value on field 'value'");
 
-    events = logs.filter(log => log.args._to === caller);
+    events = logs.filter(log => log.args.to === caller);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferDelegated caller');
     [event] = events;
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(claimedReward), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(claimedReward), "Transfer event has wrong value on field 'value'");
 
     assert(await like.balanceOf(accounts[0]), initialAmount.sub(value).sub(claimedReward), 'Wrong sender balance after transferDelegated');
     assert(await like.balanceOf(to), value, 'Wrong receiver balance after transferDelegated');
@@ -1114,23 +1114,23 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const logs = callResult.logs.filter(log => log.event === 'Transfer');
     assert.equal(logs.length, 3, 'Wrong number of Transfer events');
 
-    let events = logs.filter(log => log.args._to === to);
+    let events = logs.filter(log => log.args.to === to);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferAndCallDelegated receiver contract');
     let event = events[0];
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(value), "Transfer event has wrong value on field 'value'");
 
-    events = logs.filter(log => log.args._to === caller);
+    events = logs.filter(log => log.args.to === caller);
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferAndCallDelegated caller');
     [event] = events;
-    assert.equal(event.args._from, accounts[0], "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(claimedReward), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, accounts[0], "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(claimedReward), "Transfer event has wrong value on field 'value'");
 
-    events = logs.filter(log => log.args._to === '0x1024102410241024102410241024102410241024');
+    events = logs.filter(log => log.args.to === '0x1024102410241024102410241024102410241024');
     assert.equal(events.length, 1, 'Wrong number of Transfer events for transferAndCallDelegated contract callback');
     [event] = events;
-    assert.equal(event.args._from, to, "Transfer event has wrong value on field '_from'");
-    assert(event.args._value.eq(value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, to, "Transfer event has wrong value on field 'from'");
+    assert(event.args.value.eq(value), "Transfer event has wrong value on field 'value'");
 
     assert(await like.balanceOf(accounts[0]), initialAmount.sub(value).sub(claimedReward), 'Wrong sender balance after transferAndCallDelegated');
     assert(await like.balanceOf(to), 0, 'Wrong receiver balance after transferAndCallDelegated');
@@ -1247,10 +1247,10 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     }, 'Non-owners should not be able to remove contracts from whitelist');
 
     await utils.assertSolidityThrow(async () => {
-      await like.changeOwner(accounts[1], { from: accounts[2] });
+      await like.transferOwnership(accounts[1], { from: accounts[2] });
     }, 'Non-owners should not be able to change owner');
 
-    await like.changeOwner(accounts[1], { from: accounts[0] });
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[1] });
     }, 'Pending owner should not be able to remove contracts from whitelist before accepting ownership');
@@ -1261,9 +1261,9 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     }, 'Pending owner should not be able to add contracts into whitelist before accepting ownership');
 
     await utils.assertSolidityThrow(async () => {
-      await like.acceptOwnership({ from: accounts[2] });
+      await like.claimOwnership({ from: accounts[2] });
     }, 'Only new owner can accept ownership');
-    await like.acceptOwnership({ from: accounts[1] });
+    await like.claimOwnership({ from: accounts[1] });
     await like.addTransferAndCallWhitelist(mock.address, { from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await like.removeTransferAndCallWhitelist(mock.address, { from: accounts[0] });
@@ -1546,7 +1546,7 @@ contract('LikeCoin delegated switch', (accounts) => {
       await like.switchDelegate(true, { from: accounts[1] });
     }, 'Non-owners should not be able to switch on delegate');
 
-    await like.changeOwner(accounts[1], { from: accounts[0] });
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await like.switchDelegate(true, { from: accounts[1] });
     }, 'Pending owner should not be able to switch on delegate before accepting ownership');
@@ -1556,7 +1556,7 @@ contract('LikeCoin delegated switch', (accounts) => {
       await like.switchDelegate(false, { from: accounts[1] });
     }, 'Pending owner should not be able to switch off delegate before accepting ownership');
 
-    await like.acceptOwnership({ from: accounts[1] });
+    await like.claimOwnership({ from: accounts[1] });
     await like.switchDelegate(false, { from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await like.switchDelegate(true, { from: accounts[0] });
@@ -1623,7 +1623,7 @@ contract('LikeCoin operator', (accounts) => {
     await like.setOperator(accounts[1]);
 
     await utils.assertSolidityThrow(async () => {
-      await like.changeOwner(accounts[2], { from: accounts[1] });
+      await like.transferOwnership(accounts[2], { from: accounts[1] });
     }, 'Should forbid operator to change owner');
 
     await utils.assertSolidityThrow(async () => {
@@ -1672,9 +1672,9 @@ contract('LikeCoin Events', (accounts) => {
   it('should emit Transfer event when deploy contract', async () => {
     like = await LikeCoin.new(initialAmount);
     const transferEvent = await utils.solidityEventPromise(like.Transfer());
-    assert.equal(transferEvent.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(transferEvent.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-    assert(transferEvent.args._value.eq(initialAmount), "Transfer event has wrong value on field '_from'");
+    assert.equal(transferEvent.args.from, 0x0, "Transfer event has wrong value on field 'from'");
+    assert.equal(transferEvent.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert(transferEvent.args.value.eq(initialAmount), "Transfer event has wrong value on field 'from'");
   });
 
   const crowdsaleAmount = 100000;
@@ -1682,18 +1682,18 @@ contract('LikeCoin Events', (accounts) => {
     const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 1000000;
     const callResult = await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
     const event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(crowdsaleAmount), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(crowdsaleAmount), "Transfer event has wrong value on field 'value'");
   });
 
   const contributorPoolAmount = 200000;
   it('should emit Transfer event after minting for contributor pool', async () => {
     const callResult = await like.registerContributorPool(accounts[0], contributorPoolAmount);
     const event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(contributorPoolAmount), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(contributorPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
   const userGrowthPoolAmount = 300000;
@@ -1701,16 +1701,17 @@ contract('LikeCoin Events', (accounts) => {
     await like.registerUserGrowthPools([accounts[0]]);
     const callResult = await like.mintForUserGrowthPool(userGrowthPoolAmount);
     const event = utils.solidityEvent(callResult, 'Transfer');
-    assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
-    assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
   it('should emit OwnershipChanged event after change owner', async () => {
-    await like.changeOwner(accounts[1], { from: accounts[0] });
-    const callResult = await like.acceptOwnership({ from: accounts[1] });
-    const ownershipChangedEvent = utils.solidityEvent(callResult, 'OwnershipChanged');
-    assert.equal(ownershipChangedEvent.args._newOwner, accounts[1], "OwnershipChanged event has wrong value on field '_newOwner'");
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
+    const callResult = await like.claimOwnership({ from: accounts[1] });
+    const ownershipTransferredEvent = utils.solidityEvent(callResult, 'OwnershipTransferred');
+    assert.equal(ownershipTransferredEvent.args.previousOwner, accounts[0], "OwnershipTransferred event has wrong value on field 'previousOwner'");
+    assert.equal(ownershipTransferredEvent.args.newOwner, accounts[1], "OwnershipTransferred event has wrong value on field 'newOwner'");
   });
 });
 

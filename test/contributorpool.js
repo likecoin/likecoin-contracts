@@ -54,18 +54,18 @@ contract('ContributorPool:give', (accounts) => {
       await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[1] });
     }, 'ContributorPool contract should be registered by owner only');
 
-    await like.changeOwner(accounts[1], { from: accounts[0] });
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[1] });
     }, 'ContributorPool contract should not be registered by pending owner');
 
-    await like.acceptOwnership({ from: accounts[1] });
+    await like.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     }, 'ContributorPool contract should not be registered by old owner');
     // change back
-    await like.changeOwner(accounts[0], { from: accounts[1] });
-    await like.acceptOwnership({ from: accounts[0] });
+    await like.transferOwnership(accounts[0], { from: accounts[1] });
+    await like.claimOwnership({ from: accounts[0] });
 
     // TEST_CONT_0002
     // register by owner (acct 0)
@@ -907,9 +907,9 @@ contract('ContributorEvent', (accounts) => {
     // register by owner (acct 0)
     await like.registerContributorPool(cp.address, contributorAmount, { from: accounts[0] });
     const event = await utils.solidityEventPromise(like.Transfer());
-    assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args._to, cp.address, "Transfer event has wrong value on field '_to'");
-    assert(contributorAmount.eq(event.args._value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, cp.address, "Transfer event has wrong value on field 'to'");
+    assert(contributorAmount.eq(event.args.value), "Transfer event has wrong value on field 'value'");
   });
 
   it('should emit Set owners event', async () => {
@@ -979,9 +979,9 @@ contract('ContributorEvent', (accounts) => {
     // acct 1 claims after 2 years
     await cp.claim(giveId1[0], { from: accounts[1] });
     let event = await utils.solidityEventPromise(like.Transfer());
-    assert.equal(event.args._from, cp.address, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[1], "Transfer event has wrong value on field '_to'");
-    assert(testAmount.eq(event.args._value), "Transfer event has wrong value on field '_value'");
+    assert.equal(event.args.from, cp.address, "Transfer event has wrong value on field 'from'");
+    assert.equal(event.args.to, accounts[1], "Transfer event has wrong value on field 'to'");
+    assert(testAmount.eq(event.args.value), "Transfer event has wrong value on field 'value'");
 
     event = await utils.solidityEventPromise(cp.Claimed());
     assert(event.args._id.eq(giveId1[0]), "Claimed event has wrong value on field '_id'");
