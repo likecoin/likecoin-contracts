@@ -1640,7 +1640,7 @@ contract('LikeCoin operator', (accounts) => {
     }, 'Should forbid operator to register contributor pool');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([accounts[2]], { from: accounts[1] });
+      await like.registerUserGrowthPools([accounts[2]], 1, { from: accounts[1] });
     }, 'Should forbid operator to register user growth pool');
   });
 
@@ -1698,7 +1698,7 @@ contract('LikeCoin Events', (accounts) => {
 
   const userGrowthPoolAmount = 300000;
   it('should emit Transfer event after minting for user growth pool', async () => {
-    await like.registerUserGrowthPools([accounts[0]]);
+    await like.registerUserGrowthPools([accounts[0]], userGrowthPoolAmount);
     const callResult = await like.mintForUserGrowthPool(userGrowthPoolAmount);
     const event = utils.solidityEvent(callResult, 'Transfer');
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");

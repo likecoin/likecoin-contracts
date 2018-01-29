@@ -46,7 +46,9 @@ const mintValues = {
 contract('LikeCoin User Growth Pools', (accounts) => {
   let like;
   const mintTimes = [];
+  let mintLimit = coinsToCoinUnits(0);
   const pools = [];
+  const poolAddrs = [];
   const threshold = 3;
   const owners = [1, 2, 3, 4, 5].map(i => accounts[i]);
   const newOwners = [5, 6, 7, 8].map(i => accounts[i]);
@@ -67,9 +69,11 @@ contract('LikeCoin User Growth Pools', (accounts) => {
       const i = keys[k];
       const mintTime = start + (i * mintGap);
       mintTimes.push(mintTime);
+      mintLimit = mintLimit.add(mintValues[i]);
       const pool =
         await UserGrowthPool.new(like.address, owners, threshold, mintTime, mintValues[i]);
       pools.push(pool);
+      poolAddrs.push(pool.address);
     }
   });
 
@@ -128,16 +132,16 @@ contract('LikeCoin User Growth Pools', (accounts) => {
 
   it('should forbid non-owner to register UserGrowthPools', async () => {
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools(pools.map(pool => pool.address), { from: accounts[1] });
+      await like.registerUserGrowthPools(poolAddrs, mintLimit, { from: accounts[1] });
     }, 'should forbid accounts[1] to register UserGrowthPools');
     await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools(pools.map(pool => pool.address), { from: accounts[1] });
+      await like.registerUserGrowthPools(poolAddrs, mintLimit, { from: accounts[1] });
     }, 'should forbid pending owner accounts[1] to register UserGrowthPools');
 
     await like.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools(pools.map(pool => pool.address), { from: accounts[0] });
+      await like.registerUserGrowthPools(poolAddrs, mintLimit, { from: accounts[0] });
     }, 'should forbid old owner accounts[0] to register UserGrowthPools');
     // change back
     await like.transferOwnership(accounts[0], { from: accounts[1] });
@@ -145,9 +149,9 @@ contract('LikeCoin User Growth Pools', (accounts) => {
   });
 
   it('should forbid register UserGrowthPools more than once', async () => {
-    await like.registerUserGrowthPools(pools.map(pool => pool.address));
+    await like.registerUserGrowthPools(poolAddrs, mintLimit);
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([accounts[0]]);
+      await like.registerUserGrowthPools([accounts[0]], mintLimit);
     }, 'should forbid register UserGrowthPools more than once');
   });
 
@@ -185,12 +189,6 @@ contract('LikeCoin User Growth Pools', (accounts) => {
     await utils.assertSolidityThrow(async () => {
       await like.mintForUserGrowthPool(10000);
     }, 'Minting from unregistered address should be forbidden');
-  });
-
-  it('should forbid minting more than once', async () => {
-    await utils.assertSolidityThrow(async () => {
-      await pools[0].mint();
-    }, 'Should forbid minting more than once');
   });
 
   it('should allow transfer with confirmations', async () => {
@@ -526,14 +524,14 @@ contract('LikeCoin User Growth Pools Overflow', (accounts) => {
     // The blocktime of next block could be affected by snapshot and revert, so mine the next block
     // immediately by calling testrpcIncreaseTime
     await utils.testrpcIncreaseTime(1);
-    const mintValue0 = new BigNumber(2).pow(256).sub(1);
+    const mintValue0 = new BigNumber(2).pow(256).sub(2);
     const mintValue1 = 1;
-    const like = await LikeCoin.new(0);
+    const like = await LikeCoin.new(1);
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const mintTime = now + 1000;
     const pool0 = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValue0);
     const pool1 = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValue1);
-    await like.registerUserGrowthPools([pool0.address, pool1.address]);
+    await like.registerUserGrowthPools([pool0.address, pool1.address], mintValue0.add(mintValue1));
     await utils.testrpcIncreaseTime((mintTime - now) + 1);
     await pool0.mint();
     await utils.assertSolidityThrow(async () => {
@@ -551,7 +549,7 @@ contract('LikeCoin User Growth Pools Invalid IDs', (accounts) => {
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const mintTime = now + 1000;
     const pool = await UserGrowthPool.new(like.address, [accounts[0]], 1, mintTime, mintValues[0]);
-    await like.registerUserGrowthPools([pool.address]);
+    await like.registerUserGrowthPools([pool.address], mintValues[0]);
     await utils.testrpcIncreaseTime((mintTime - now) + 1);
     await pool.mint();
     const upperBound = new BigNumber(2).pow(64);
