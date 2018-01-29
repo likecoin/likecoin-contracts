@@ -176,7 +176,62 @@ contract LikeCoin is ERC20 {
         return (v, r, s);
     }
 
-    bytes32 transferAndCallDelegatedHash = keccak256("address contract", "string method", "address to", "uint256 value", "bytes data", "uint256 maxReward", "uint256 nonce");
+    modifier isDelegated(address _from, uint256 _maxReward, uint256 _claimedReward, uint256 _nonce) {
+        require(allowDelegate);
+        require(_claimedReward <= _maxReward);
+        require(!usedNonce[_from][_nonce]);
+        usedNonce[_from][_nonce] = true;
+        require(_transfer(_from, msg.sender, _claimedReward));
+        _;
+    }
+
+    bytes32 transferDelegatedHash = keccak256(
+        "address contract",
+        "string method",
+        "address to",
+        "uint256 value",
+        "uint256 maxReward",
+        "uint256 nonce"
+    );
+
+    function transferDelegatedRecover(
+        address _to,
+        uint256 _value,
+        uint256 _maxReward,
+        uint256 _nonce,
+        bytes _signature
+    ) public constant returns (address) {
+        bytes32 hash = keccak256(
+            transferDelegatedHash,
+            keccak256(this, "transferDelegated", _to, _value, _maxReward, _nonce)
+        );
+        var (v, r, s) = _bytesToSignature(_signature);
+        return ecrecover(hash, v, r, s);
+    }
+
+    function transferDelegated(
+        address _from,
+        address _to,
+        uint256 _value,
+        uint256 _maxReward,
+        uint256 _claimedReward,
+        uint256 _nonce,
+        bytes _signature
+    ) isDelegated(_from, _maxReward, _claimedReward, _nonce) public returns (bool success) {
+        require(transferDelegatedRecover(_to, _value, _maxReward, _nonce, _signature) == _from);
+        return _transfer(_from, _to, _value);
+    }
+
+    bytes32 transferAndCallDelegatedHash = keccak256(
+        "address contract",
+        "string method",
+        "address to",
+        "uint256 value",
+        "bytes data",
+        "uint256 maxReward",
+        "uint256 nonce"
+    );
+
     function transferAndCallDelegatedRecover(
         address _to,
         uint256 _value,
@@ -185,7 +240,10 @@ contract LikeCoin is ERC20 {
         uint256 _nonce,
         bytes _signature
     ) public constant returns (address) {
-        bytes32 hash = keccak256(transferAndCallDelegatedHash, keccak256(this, "transferAndCallDelegated", _to, _value, _data, _maxReward, _nonce));
+        bytes32 hash = keccak256(
+            transferAndCallDelegatedHash,
+            keccak256(this, "transferAndCallDelegated", _to, _value, _data, _maxReward, _nonce)
+        );
         var (v, r, s) = _bytesToSignature(_signature);
         return ecrecover(hash, v, r, s);
     }
@@ -199,17 +257,20 @@ contract LikeCoin is ERC20 {
         uint256 _claimedReward,
         uint256 _nonce,
         bytes _signature
-    ) public returns (bool success) {
-        require(allowDelegate);
-        require(_claimedReward <= _maxReward);
+    ) isDelegated(_from, _maxReward, _claimedReward, _nonce) public returns (bool success) {
         require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
-        require(!usedNonce[_from][_nonce]);
-        usedNonce[_from][_nonce] = true;
-        require(_transfer(_from, msg.sender, _claimedReward));
         return _transferAndCall(_from, _to, _value, _data);
     }
 
-    bytes32 transferMultipleDelegatedHash = keccak256("address contract", "string method", "address[] addrs", "uint256[] values", "uint256 maxReward", "uint256 nonce");
+    bytes32 transferMultipleDelegatedHash = keccak256(
+        "address contract",
+        "string method",
+        "address[] addrs",
+        "uint256[] values",
+        "uint256 maxReward",
+        "uint256 nonce"
+    );
+
     function transferMultipleDelegatedRecover(
         address[] _addrs,
         uint256[] _values,
@@ -217,7 +278,10 @@ contract LikeCoin is ERC20 {
         uint256 _nonce,
         bytes _signature
     ) public constant returns (address) {
-        bytes32 hash = keccak256(transferMultipleDelegatedHash, keccak256(this, "transferMultipleDelegated", _addrs, _values, _maxReward, _nonce));
+        bytes32 hash = keccak256(
+            transferMultipleDelegatedHash,
+            keccak256(this, "transferMultipleDelegated", _addrs, _values, _maxReward, _nonce)
+        );
         var (v, r, s) = _bytesToSignature(_signature);
         return ecrecover(hash, v, r, s);
     }
@@ -230,13 +294,8 @@ contract LikeCoin is ERC20 {
         uint256 _claimedReward,
         uint256 _nonce,
         bytes _signature
-    ) public returns (bool success) {
-        require(allowDelegate);
-        require(_claimedReward <= _maxReward);
+    ) isDelegated(_from, _maxReward, _claimedReward, _nonce) public returns (bool success) {
         require(transferMultipleDelegatedRecover(_addrs, _values, _maxReward, _nonce, _signature) == _from);
-        require(!usedNonce[_from][_nonce]);
-        usedNonce[_from][_nonce] = true;
-        require(_transfer(_from, msg.sender, _claimedReward));
         return _transferMultiple(_from, _addrs, _values);
     }
 

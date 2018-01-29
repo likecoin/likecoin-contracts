@@ -41,6 +41,18 @@ function signTypedCall(signData, privKey) {
   return AccountLib.sign(hash, privKey);
 }
 
+function signTransferDelegated(likeAddr, to, value, maxReward, nonce, privKey) {
+  const signData = [
+    { type: 'address', name: 'contract', value: likeAddr },
+    { type: 'string', name: 'method', value: 'transferDelegated' },
+    { type: 'address', name: 'to', value: to },
+    { type: 'uint256', name: 'value', value },
+    { type: 'uint256', name: 'maxReward', value: maxReward },
+    { type: 'uint256', name: 'nonce', value: nonce },
+  ];
+  return signTypedCall(signData, privKey);
+}
+
 function signTransferAndCallDelegated(likeAddr, to, value, data, maxReward, nonce, privKey) {
   const signData = [
     { type: 'address', name: 'contract', value: likeAddr },
@@ -75,6 +87,40 @@ function encodeMock2(to, value, key) {
 }
 
 contract('LikeCoin', (accounts) => {
+  it('Gas for normal transfer', async () => {
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    let callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
+    console.log(`Normal transfer, first time gas used = ${callResult.receipt.gasUsed}`);
+    callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
+    console.log(`Normal transfer, second time gas used = ${callResult.receipt.gasUsed}`);
+  });
+
+  it('Gas for transferDelegated', async () => {
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const from = accounts[0];
+    const privKey = Accounts[0].secretKey;
+    const to = accounts[1];
+    const value = coinsToCoinUnits(100);
+    const maxReward = 0;
+    const claimedReward = 0;
+    let nonce = web3Utils.randomHex(32);
+    let signature =
+      signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
+    let callResult = await like.transferDelegated(
+      from, to, value, maxReward, claimedReward,
+      nonce, signature, { from: accounts[2] },
+    );
+    console.log(`transferDelegated, first time gas used = ${callResult.receipt.gasUsed}`);
+    nonce = web3Utils.randomHex(32);
+    signature =
+      signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
+    callResult = await like.transferDelegated(
+      from, to, value, maxReward, claimedReward,
+      nonce, signature, { from: accounts[2] },
+    );
+    console.log(`transferDelegated, second time gas used = ${callResult.receipt.gasUsed}`);
+  });
+
   it('Gas for builtin transferMultiple', async () => {
     const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     let addrs = [1, 2, 3, 4, 5].map(i => accounts[i]);
@@ -211,14 +257,6 @@ contract('LikeCoin', (accounts) => {
       nonce, signature, { from: accounts[1] },
     );
     console.log(`transferAndCallDelegated, second time gas used = ${callResult.receipt.gasUsed}`);
-  });
-
-  it('Gas for normal transfer', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
-    let callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
-    console.log(`Normal transfer, first time gas used = ${callResult.receipt.gasUsed}`);
-    callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
-    console.log(`Normal transfer, second time gas used = ${callResult.receipt.gasUsed}`);
   });
 
   it('Gas for transferAndCall (Mock 2)', async () => {
