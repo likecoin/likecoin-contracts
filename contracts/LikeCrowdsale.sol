@@ -47,6 +47,8 @@ contract LikeCrowdsale {
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint8 _referrerBonusPercent) public {
         require(_coinsPerEth != 0);
         require(_referrerBonusPercent != 0);
+        require(now < _start);
+        require(_start < _end);
         owner = msg.sender;
         like = LikeCoin(_likeAddr);
         start = _start;

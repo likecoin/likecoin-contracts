@@ -483,8 +483,9 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
   });
 
   it('should forbid registering another crowdsale contract', async () => {
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const anotherCrowdsale =
-      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, referrerBonusPercent);
+      await LikeCrowdsale.new(like.address, now + 10, now + 100, coinsPerEth, referrerBonusPercent);
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(anotherCrowdsale.address, hardCap, unlockTime);
     }, 'Registering another crowdsale contract should be forbidden');
