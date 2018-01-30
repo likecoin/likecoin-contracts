@@ -576,6 +576,10 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
     await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
     await crowdsale.claimOwnership({ from: accounts[0] });
 
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.changePrice(0, { from: accounts[0] });
+    }, 'Should not allow new price to be 0');
+
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     await utils.testrpcIncreaseTime((start - now) + 1);
     await crowdsale.registerKYC([accounts[1], accounts[2], accounts[3]]);

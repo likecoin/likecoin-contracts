@@ -27,7 +27,9 @@ const AccountLib = require('eth-lib/lib/account');
 const Accounts = require('./accounts.json');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
+const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
+const UserGrowthPool = artifacts.require('./UserGrowthPool.sol');
 
 const { coinsToCoinUnits } = utils;
 
@@ -154,6 +156,8 @@ contract('LikeCoin Basic', (accounts) => {
 
     const allowanceOf1On0After = (await like.allowance(accounts[0], accounts[1]));
     assert(allowanceOf1On0After.eq(allowance.sub(transferAmount)), "Allowance wasn't correctly changed");
+
+    await like.approve(accounts[1], 0, { from: accounts[0] });
   });
 
   it('should forbid unapproved transferFrom', async () => {
@@ -212,6 +216,11 @@ contract('LikeCoin Basic', (accounts) => {
     const balance2Before = await like.balanceOf(accounts[2]);
     await like.approve(accounts[1], 2000, { from: accounts[2] });
     await like.transferFrom(accounts[2], accounts[0], 1000, { from: accounts[1] });
+    await utils.assertSolidityThrow(async () => {
+      await like.approve(accounts[1], 1, { from: accounts[2] });
+    }, 'Approval value should be reset to 0 before setting to other values');
+    await like.approve(accounts[1], 0, { from: accounts[2] });
+    assert((await like.allowance(accounts[2], accounts[1])).eq(0), 'Allowance is not correctly reset to 0 unit');
     await like.approve(accounts[1], 1, { from: accounts[2] });
     assert((await like.allowance(accounts[2], accounts[1])).eq(1), 'Allowance is not correctly reset to 1 unit');
     await utils.assertSolidityThrow(async () => {
@@ -249,17 +258,21 @@ contract('LikeCoin Basic', (accounts) => {
 
   it('should transfer and lock correctly', async () => {
     const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
-    await like.registerCrowdsales(accounts[1], 1, unlockTime);
+    // For the purpose of setting unlockTime, use arbitrary contract address to call
+    // registerCrowdsales
+    await like.registerCrowdsales(like.address, 1, unlockTime);
     const balance0Before = await like.balanceOf(accounts[0]);
     const balance1 = await like.balanceOf(accounts[1]);
     assert(!balance0Before.eq(0), 'Banalce in accounts[0] is 0, please check test case');
     assert(!balance1.eq(0), 'Banalce in accounts[1] is 0, please check test case');
 
+    assert.notEqual(await like.owner(), accounts[2], 'accounts[2] should not be owner, please check test case.');
     await utils.assertSolidityThrow(async () => {
-      assert.notEqual(await like.owner(), accounts[2], 'accounts[2] should not be owner, please check test case.');
       assert(!(await like.balanceOf(accounts[2])).eq(0), 'accounts[2] has no balance, please check test case.');
       await like.transferAndLock(accounts[1], 1, { from: accounts[2] });
-    }, 'Only crowdsale address or owner can call transferAndLock');
+    }, 'Only crowdsale address, owner or operator can call transferAndLock');
+
+    await like.setOperator(accounts[1]);
 
     const callResult = await like.transferAndLock(accounts[0], balance1, { from: accounts[1] });
     const transferEvent = utils.solidityEvent(callResult, 'Transfer');
@@ -495,9 +508,11 @@ contract('LikeCoin transferAndCall', (accounts) => {
 contract('LikeCoin transferMultipleDelegated', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
+    sigChecker = await SignatureCheckerImpl.new();
   });
 
   it('should transfer coins into multiple accounts', async () => {
@@ -512,8 +527,21 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const nonce = web3Utils.randomHex(32);
     const signature =
       signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
-
     const caller = accounts[1];
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferMultipleDelegated(
+        from, addrs, values, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should not be able to do delegated call before setting signature checker');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setSignatureChecker(sigChecker.address, { from: accounts[1] });
+    }, 'only owner can set signature checker');
+
+    await like.setSignatureChecker(sigChecker.address);
+
     const callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: caller },
@@ -722,6 +750,7 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const caller = accounts[2];
 
     const anotherLike = await LikeCoin.new(0);
+    await anotherLike.setSignatureChecker(sigChecker.address);
     let nonce = web3Utils.randomHex(32);
     let signature =
       signTransferMultipleDelegated(anotherLike.address, addrs, values, maxReward, nonce, privKey);
@@ -831,9 +860,11 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
 contract('LikeCoin transferDelegated', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
+    sigChecker = await SignatureCheckerImpl.new();
   });
 
   it('should transfer LIKE and call callback in contract', async () => {
@@ -845,8 +876,20 @@ contract('LikeCoin transferDelegated', (accounts) => {
     const claimedReward = maxReward.sub(1);
     const nonce = web3Utils.randomHex(32);
     const signature = signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
-
     const caller = accounts[2];
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferDelegated(
+        from, to, value, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should not be able to do delegated call before setting signature checker');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setSignatureChecker(sigChecker.address, { from: accounts[1] });
+    }, 'only owner can set signature checker');
+
+    await like.setSignatureChecker(sigChecker.address);
     const callResult = await like.transferDelegated(
       from, to, value, maxReward, claimedReward,
       nonce, signature, { from: caller },
@@ -977,6 +1020,7 @@ contract('LikeCoin transferDelegated', (accounts) => {
     const caller = accounts[2];
 
     const anotherLike = await LikeCoin.new(0);
+    await anotherLike.setSignatureChecker(sigChecker.address);
     let nonce = web3Utils.randomHex(32);
     let signature =
       signTransferDelegated(anotherLike.address, to, value, maxReward, nonce, privKey);
@@ -1087,11 +1131,13 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     like.addTransferAndCallWhitelist(mock.address);
+    sigChecker = await SignatureCheckerImpl.new();
   });
 
   it('should transfer LIKE and call callback in contract', async () => {
@@ -1105,8 +1151,21 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const nonce = web3Utils.randomHex(32);
     const signature =
       signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
-
     const caller = accounts[1];
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferAndCallDelegated(
+        from, to, value, data, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should not be able to do delegated call before setting signature checker');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setSignatureChecker(sigChecker.address, { from: accounts[1] });
+    }, 'only owner can set signature checker');
+
+    await like.setSignatureChecker(sigChecker.address);
+
     const callResult = await like.transferAndCallDelegated(
       from, to, value, data, maxReward, claimedReward,
       nonce, signature, { from: caller },
@@ -1192,6 +1251,7 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
 
     // All LIKE are locked, so deploy new contract
     like = await LikeCoin.new(initialAmount);
+    await like.setSignatureChecker(sigChecker.address);
     mock = await TransferAndCallReceiverMock.new(like.address);
   });
 
@@ -1359,6 +1419,7 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const caller = accounts[1];
 
     const anotherLike = await LikeCoin.new(0);
+    await anotherLike.setSignatureChecker(sigChecker.address);
     let nonce = web3Utils.randomHex(32);
     let signature =
       signTransferAndCallDelegated(anotherLike.address, to, value, data, maxReward, nonce, privKey);
@@ -1482,11 +1543,14 @@ contract('LikeCoin delegated switch', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     await like.addTransferAndCallWhitelist(mock.address);
+    sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
   });
 
   it('should process delegated switch properly', async () => {
@@ -1573,11 +1637,14 @@ contract('LikeCoin operator', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     await like.setOperator(accounts[1]);
+    sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
   });
 
   it('should allow operator to switch delegated', async () => {
@@ -1632,21 +1699,23 @@ contract('LikeCoin operator', (accounts) => {
 
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     await utils.assertSolidityThrow(async () => {
-      await like.registerCrowdsales(accounts[2], 1, now + 100000, { from: accounts[1] });
+      await like.registerCrowdsales(like.address, 1, now + 100000, { from: accounts[1] });
     }, 'Should forbid operator to register crowdsale');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerContributorPool(accounts[2], 1, { from: accounts[1] });
+      await like.registerContributorPool(like.address, 1, { from: accounts[1] });
     }, 'Should forbid operator to register contributor pool');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([accounts[2]], 1, { from: accounts[1] });
+      await like.registerUserGrowthPools([like.address], 1, { from: accounts[1] });
     }, 'Should forbid operator to register user growth pool');
   });
 
   it('should allow operator to call transferAndLock', async () => {
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-    await like.registerCrowdsales(accounts[2], 1, now + 100000);
+    // For the purpose of setting unlockTime, use arbitrary contract address to call
+    // registerCrowdsales
+    await like.registerCrowdsales(like.address, 1, now + 100000);
     await like.transfer(accounts[1], initialAmount.div(10));
     await like.transfer(accounts[2], initialAmount.div(10));
 
@@ -1665,6 +1734,37 @@ contract('LikeCoin operator', (accounts) => {
   });
 });
 
+contract('LikeCoin register', (accounts) => {
+  it('should restrict registers', async () => {
+    const like = await LikeCoin.new(0);
+
+    const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
+    await utils.assertSolidityThrow(async () => {
+      await like.registerCrowdsales(accounts[0], 1, unlockTime);
+    }, 'Should forbid registering non-contract address as Crowdsale');
+    await like.registerCrowdsales(like.address, 1, unlockTime);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerCrowdsales(like.address, 1, unlockTime);
+    }, 'Should forbid registering Crowdsale again');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerContributorPool(accounts[0], 1);
+    }, 'Should forbid registering non-contract address as ContributorPool');
+    await like.registerContributorPool(like.address, 1);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerContributorPool(like.address, 1);
+    }, 'Should forbid registering ContributorPool again');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerUserGrowthPools([accounts[0], accounts[1]], 1);
+    }, 'Should forbid registering non-contract addresses as UserGrowthPools');
+    await like.registerUserGrowthPools([like.address], 1);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerUserGrowthPools([like.address], 1);
+    }, 'Should forbid registering UserGrowthPools again');
+  });
+});
+
 contract('LikeCoin Events', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
@@ -1680,33 +1780,36 @@ contract('LikeCoin Events', (accounts) => {
   const crowdsaleAmount = 100000;
   it('should emit Transfer event after minting for crowdsale', async () => {
     const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 1000000;
-    const callResult = await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
+    const callResult = await like.registerCrowdsales(like.address, crowdsaleAmount, unlockTime);
     const event = utils.solidityEvent(callResult, 'Transfer');
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert.equal(event.args.to, like.address, "Transfer event has wrong value on field 'to'");
     assert(event.args.value.eq(crowdsaleAmount), "Transfer event has wrong value on field 'value'");
   });
 
   const contributorPoolAmount = 200000;
   it('should emit Transfer event after minting for contributor pool', async () => {
-    const callResult = await like.registerContributorPool(accounts[0], contributorPoolAmount);
+    const callResult = await like.registerContributorPool(like.address, contributorPoolAmount);
     const event = utils.solidityEvent(callResult, 'Transfer');
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert.equal(event.args.to, like.address, "Transfer event has wrong value on field 'to'");
     assert(event.args.value.eq(contributorPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
   const userGrowthPoolAmount = 300000;
   it('should emit Transfer event after minting for user growth pool', async () => {
-    await like.registerUserGrowthPools([accounts[0]], userGrowthPoolAmount);
-    const callResult = await like.mintForUserGrowthPool(userGrowthPoolAmount);
-    const event = utils.solidityEvent(callResult, 'Transfer');
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    const userGrowthPool =
+      await UserGrowthPool.new(like.address, [accounts[0]], 1, now - 100, userGrowthPoolAmount);
+    await like.registerUserGrowthPools([userGrowthPool.address], userGrowthPoolAmount);
+    await userGrowthPool.mint();
+    const event = await utils.solidityEventPromise(like.Transfer());
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args.to, accounts[0], "Transfer event has wrong value on field 'to'");
+    assert.equal(event.args.to, userGrowthPool.address, "Transfer event has wrong value on field 'to'");
     assert(event.args.value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
-  it('should emit OwnershipChanged event after change owner', async () => {
+  it('should emit OwnershipTransferred event after change owner', async () => {
     await like.transferOwnership(accounts[1], { from: accounts[0] });
     const callResult = await like.claimOwnership({ from: accounts[1] });
     const ownershipTransferredEvent = utils.solidityEvent(callResult, 'OwnershipTransferred');

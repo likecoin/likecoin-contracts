@@ -58,6 +58,7 @@ contract LikeCrowdsale is HasOperator {
     }
 
     function changePrice(uint256 _newCoinsPerEth) onlyOwner public {
+        require(_newCoinsPerEth != 0);
         require(_newCoinsPerEth != coinsPerEth);
         require(now < start);
         coinsPerEth = _newCoinsPerEth;
@@ -90,6 +91,7 @@ contract LikeCrowdsale is HasOperator {
     function () public payable {
         require(now >= start);
         require(now < end);
+        require(!finalized);
         require(like.balanceOf(this) > 0);
         require(msg.value > 0);
         require(kycDone[msg.sender]);
