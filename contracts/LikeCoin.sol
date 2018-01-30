@@ -202,6 +202,7 @@ contract LikeCoin is ERC20 {
         bytes _signature
     ) public returns (bool success) {
         require(allowDelegate);
+        require(_from != 0x0);
         require(_claimedReward <= _maxReward);
         require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
         require(!usedNonce[_from][_nonce]);
@@ -233,6 +234,7 @@ contract LikeCoin is ERC20 {
         bytes _signature
     ) public returns (bool success) {
         require(allowDelegate);
+        require(_from != 0x0);
         require(_claimedReward <= _maxReward);
         require(transferMultipleDelegatedRecover(_addrs, _values, _maxReward, _nonce, _signature) == _from);
         require(!usedNonce[_from][_nonce]);
