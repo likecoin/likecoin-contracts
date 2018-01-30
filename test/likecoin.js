@@ -143,6 +143,8 @@ contract('LikeCoin Basic', (accounts) => {
 
     const allowanceOf1On0After = (await like.allowance(accounts[0], accounts[1]));
     assert(allowanceOf1On0After.eq(allowance.sub(transferAmount)), "Allowance wasn't correctly changed");
+
+    await like.approve(accounts[1], 0, { from: accounts[0] });
   });
 
   it('should forbid unapproved transferFrom', async () => {
@@ -201,6 +203,11 @@ contract('LikeCoin Basic', (accounts) => {
     const balance2Before = await like.balanceOf(accounts[2]);
     await like.approve(accounts[1], 2000, { from: accounts[2] });
     await like.transferFrom(accounts[2], accounts[0], 1000, { from: accounts[1] });
+    await utils.assertSolidityThrow(async () => {
+      await like.approve(accounts[1], 1, { from: accounts[2] });
+    }, 'Approval value should be reset to 0 before setting to other values');
+    await like.approve(accounts[1], 0, { from: accounts[2] });
+    assert((await like.allowance(accounts[2], accounts[1])).eq(0), 'Allowance is not correctly reset to 0 unit');
     await like.approve(accounts[1], 1, { from: accounts[2] });
     assert((await like.allowance(accounts[2], accounts[1])).eq(1), 'Allowance is not correctly reset to 1 unit');
     await utils.assertSolidityThrow(async () => {
