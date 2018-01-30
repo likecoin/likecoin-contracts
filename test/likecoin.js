@@ -29,7 +29,7 @@ const Accounts = require('./accounts.json');
 const LikeCoin = artifacts.require('./LikeCoin.sol');
 const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
-const UserGrowthPool = artifacts.require('./UserGrowthPool.sol');
+const CreatorsPool = artifacts.require('./CreatorsPool.sol');
 
 const { coinsToCoinUnits } = utils;
 
@@ -1707,8 +1707,8 @@ contract('LikeCoin operator', (accounts) => {
     }, 'Should forbid operator to register contributor pool');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([like.address], 1, { from: accounts[1] });
-    }, 'Should forbid operator to register user growth pool');
+      await like.registerCreatorsPools([like.address], 1, { from: accounts[1] });
+    }, 'Should forbid operator to register creators pool');
   });
 
   it('should allow operator to call transferAndLock', async () => {
@@ -1756,12 +1756,12 @@ contract('LikeCoin register', (accounts) => {
     }, 'Should forbid registering ContributorPool again');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([accounts[0], accounts[1]], 1);
-    }, 'Should forbid registering non-contract addresses as UserGrowthPools');
-    await like.registerUserGrowthPools([like.address], 1);
+      await like.registerCreatorsPools([accounts[0], accounts[1]], 1);
+    }, 'Should forbid registering non-contract addresses as CreatorsPools');
+    await like.registerCreatorsPools([like.address], 1);
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([like.address], 1);
-    }, 'Should forbid registering UserGrowthPools again');
+      await like.registerCreatorsPools([like.address], 1);
+    }, 'Should forbid registering CreatorsPools again');
   });
 });
 
@@ -1796,17 +1796,17 @@ contract('LikeCoin Events', (accounts) => {
     assert(event.args.value.eq(contributorPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
-  const userGrowthPoolAmount = 300000;
-  it('should emit Transfer event after minting for user growth pool', async () => {
+  const creatorsPoolAmount = 300000;
+  it('should emit Transfer event after minting for creators pool', async () => {
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-    const userGrowthPool =
-      await UserGrowthPool.new(like.address, [accounts[0]], 1, now - 100, userGrowthPoolAmount);
-    await like.registerUserGrowthPools([userGrowthPool.address], userGrowthPoolAmount);
-    await userGrowthPool.mint();
+    const creatorsPool =
+      await CreatorsPool.new(like.address, [accounts[0]], 1, now - 100, creatorsPoolAmount);
+    await like.registerCreatorsPools([creatorsPool.address], creatorsPoolAmount);
+    await creatorsPool.mint();
     const event = await utils.solidityEventPromise(like.Transfer());
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args.to, userGrowthPool.address, "Transfer event has wrong value on field 'to'");
-    assert(event.args.value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field 'value'");
+    assert.equal(event.args.to, creatorsPool.address, "Transfer event has wrong value on field 'to'");
+    assert(event.args.value.eq(creatorsPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 
   it('should emit OwnershipTransferred event after change owner', async () => {

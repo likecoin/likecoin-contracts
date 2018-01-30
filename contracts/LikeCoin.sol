@@ -38,9 +38,9 @@ contract LikeCoin is ERC20, HasOperator {
 
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
-    address[] public userGrowthPoolAddrs;
-    mapping(address => bool) isUserGrowthPool;
-    uint256 public userGrowthPoolMintQuota = 0;
+    address[] public creatorsPoolAddrs;
+    mapping(address => bool) isCreatorsPool;
+    uint256 public creatorsPoolMintQuota = 0;
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
     SignatureChecker public signatureChecker = SignatureChecker(0x0);
@@ -262,22 +262,22 @@ contract LikeCoin is ERC20, HasOperator {
         Transfer(0x0, contributorPoolAddr, _value);
     }
 
-    function registerUserGrowthPools(address[] _poolAddrs, uint256 _mintLimit) onlyOwner public {
-        require(userGrowthPoolAddrs.length == 0);
+    function registerCreatorsPools(address[] _poolAddrs, uint256 _mintLimit) onlyOwner public {
+        require(creatorsPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
         require(_mintLimit > 0);
         for (uint i = 0; i < _poolAddrs.length; ++i) {
             require(_isContract(_poolAddrs[i]));
-            userGrowthPoolAddrs.push(_poolAddrs[i]);
-            isUserGrowthPool[_poolAddrs[i]] = true;
+            creatorsPoolAddrs.push(_poolAddrs[i]);
+            isCreatorsPool[_poolAddrs[i]] = true;
         }
-        userGrowthPoolMintQuota = _mintLimit;
+        creatorsPoolMintQuota = _mintLimit;
     }
 
-    function mintForUserGrowthPool(uint256 _value) public {
-        require(isUserGrowthPool[msg.sender]);
+    function mintForCreatorsPool(uint256 _value) public {
+        require(isCreatorsPool[msg.sender]);
         require(_value != 0);
-        userGrowthPoolMintQuota = userGrowthPoolMintQuota.sub(_value);
+        creatorsPoolMintQuota = creatorsPoolMintQuota.sub(_value);
         supply = supply.add(_value);
         balances[msg.sender] = balances[msg.sender].add(_value);
         Transfer(0x0, msg.sender, _value);
