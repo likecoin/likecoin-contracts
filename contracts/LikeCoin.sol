@@ -91,6 +91,8 @@ contract LikeCoin is ERC20 {
 
     function _transfer(address _from, address _to, uint256 _value) internal returns (bool success) {
         _tryUnlockBalance(_from);
+        require(_from != 0x0);
+        require(_to != 0x0);
         require(balances[_from] >= _value);
         require(balances[_to] + _value >= balances[_to]);
         balances[_from] -= _value;
@@ -104,6 +106,8 @@ contract LikeCoin is ERC20 {
     }
 
     function transferAndLock(address _to, uint256 _value) public returns (bool success) {
+        require(msg.sender != 0x0);
+        require(_to != 0x0);
         require(now < unlockTime);
         require(msg.sender == crowdsaleAddr || msg.sender == owner || msg.sender == operator);
         require(balances[msg.sender] >= _value);
@@ -123,12 +127,14 @@ contract LikeCoin is ERC20 {
     }
 
     function _transferMultiple(address _from, address[] _addrs, uint256[] _values) internal returns (bool success) {
+        require(_from != 0x0);
         require(_addrs.length > 0);
         require(_values.length == _addrs.length);
         _tryUnlockBalance(_from);
         uint256 total = 0;
         for (uint i = 0; i < _addrs.length; ++i) {
             address addr = _addrs[i];
+            require(addr != 0x0);
             uint256 value = _values[i];
             uint256 balance = balances[addr];
             require(balance + value >= balance);
