@@ -92,7 +92,6 @@ contract LikeCrowdsale is HasOperator {
         require(now >= start);
         require(now < end);
         require(!finalized);
-        require(like.balanceOf(this) > 0);
         require(msg.value > 0);
         require(kycDone[msg.sender]);
         uint256 coins = coinsPerEth.mul(msg.value);
