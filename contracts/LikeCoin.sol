@@ -168,6 +168,7 @@ contract LikeCoin is ERC20 {
     }
 
     function _bytesToSignature(bytes sig) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
+        require(sig.length == 65);
         assembly {
             r := mload(add(sig, 32))
             s := mload(add(sig, 64))
