@@ -18,6 +18,7 @@
 pragma solidity ^0.4.18;
 
 import "./ERC20.sol";
+import "./SignatureChecker.sol";
 import "./TransferAndCallReceiver.sol";
 
 contract LikeCoin is ERC20 {
@@ -41,12 +42,14 @@ contract LikeCoin is ERC20 {
     mapping (address => bool) userGrowthPoolMinted;
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
+    SignatureChecker public signatureChecker = SignatureChecker(0x0);
     bool public allowDelegate = true;
     mapping (address => mapping (uint256 => bool)) public usedNonce;
     mapping (address => bool) public transferAndCallWhitelist;
 
     event Lock(address indexed _addr, uint256 _value);
     event OwnershipChanged(address _newOwner);
+    event SignatureCheckerChanged(address _newSignatureChecker);
 
     function LikeCoin(uint256 _initialSupply) public {
         owner = msg.sender;
@@ -173,28 +176,11 @@ contract LikeCoin is ERC20 {
         return _transferAndCall(msg.sender, _to, _value, _data);
     }
 
-    function _bytesToSignature(bytes sig) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
-        require(sig.length == 65);
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := and(mload(add(sig, 65)), 0xFF)
-        }
-        return (v, r, s);
-    }
-
-    bytes32 transferAndCallDelegatedHash = keccak256("address contract", "string method", "address to", "uint256 value", "bytes data", "uint256 maxReward", "uint256 nonce");
-    function transferAndCallDelegatedRecover(
-        address _to,
-        uint256 _value,
-        bytes _data,
-        uint256 _maxReward,
-        uint256 _nonce,
-        bytes _signature
-    ) public constant returns (address) {
-        bytes32 hash = keccak256(transferAndCallDelegatedHash, keccak256(this, "transferAndCallDelegated", _to, _value, _data, _maxReward, _nonce));
-        var (v, r, s) = _bytesToSignature(_signature);
-        return ecrecover(hash, v, r, s);
+    function setSignatureChecker(address _sigCheckerAddr) public {
+        require(msg.sender == owner);
+        require(signatureChecker != _sigCheckerAddr);
+        signatureChecker = SignatureChecker(_sigCheckerAddr);
+        SignatureCheckerChanged(_sigCheckerAddr);
     }
 
     function transferAndCallDelegated(
@@ -210,24 +196,11 @@ contract LikeCoin is ERC20 {
         require(allowDelegate);
         require(_from != 0x0);
         require(_claimedReward <= _maxReward);
-        require(transferAndCallDelegatedRecover(_to, _value, _data, _maxReward, _nonce, _signature) == _from);
+        require(signatureChecker.checkTransferAndCallDelegated(_from, _to, _value, _data, _maxReward, _nonce, _signature));
         require(!usedNonce[_from][_nonce]);
         usedNonce[_from][_nonce] = true;
         require(_transfer(_from, msg.sender, _claimedReward));
         return _transferAndCall(_from, _to, _value, _data);
-    }
-
-    bytes32 transferMultipleDelegatedHash = keccak256("address contract", "string method", "address[] addrs", "uint256[] values", "uint256 maxReward", "uint256 nonce");
-    function transferMultipleDelegatedRecover(
-        address[] _addrs,
-        uint256[] _values,
-        uint256 _maxReward,
-        uint256 _nonce,
-        bytes _signature
-    ) public constant returns (address) {
-        bytes32 hash = keccak256(transferMultipleDelegatedHash, keccak256(this, "transferMultipleDelegated", _addrs, _values, _maxReward, _nonce));
-        var (v, r, s) = _bytesToSignature(_signature);
-        return ecrecover(hash, v, r, s);
     }
 
     function transferMultipleDelegated(
@@ -242,7 +215,7 @@ contract LikeCoin is ERC20 {
         require(allowDelegate);
         require(_from != 0x0);
         require(_claimedReward <= _maxReward);
-        require(transferMultipleDelegatedRecover(_addrs, _values, _maxReward, _nonce, _signature) == _from);
+        require(signatureChecker.checkTransferMultipleDelegated(_from, _addrs, _values, _maxReward, _nonce, _signature));
         require(!usedNonce[_from][_nonce]);
         usedNonce[_from][_nonce] = true;
         require(_transfer(_from, msg.sender, _claimedReward));

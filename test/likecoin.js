@@ -27,6 +27,7 @@ const AccountLib = require('eth-lib/lib/account');
 const Accounts = require('./accounts.json');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
+const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
 const UserGrowthPool = artifacts.require('./UserGrowthPool.sol');
 
@@ -495,9 +496,11 @@ contract('LikeCoin transferAndCall', (accounts) => {
 contract('LikeCoin transferMultipleDelegated', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
+    sigChecker = await SignatureCheckerImpl.new();
   });
 
   it('should transfer coins into multiple accounts', async () => {
@@ -512,8 +515,21 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const nonce = web3Utils.randomHex(32);
     const signature =
       signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
-
     const caller = accounts[1];
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferMultipleDelegated(
+        from, addrs, values, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should not be able to do delegated call before setting signature checker');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setSignatureChecker(sigChecker.address, { from: accounts[1] });
+    }, 'only owner can set signature checker');
+
+    await like.setSignatureChecker(sigChecker.address);
+
     const callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: caller },
@@ -722,6 +738,7 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const caller = accounts[2];
 
     const anotherLike = await LikeCoin.new(0);
+    await anotherLike.setSignatureChecker(sigChecker.address);
     let nonce = web3Utils.randomHex(32);
     let signature =
       signTransferMultipleDelegated(anotherLike.address, addrs, values, maxReward, nonce, privKey);
@@ -832,11 +849,13 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     like.addTransferAndCallWhitelist(mock.address);
+    sigChecker = await SignatureCheckerImpl.new();
   });
 
   it('should transfer LIKE and call callback in contract', async () => {
@@ -850,8 +869,21 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const nonce = web3Utils.randomHex(32);
     const signature =
       signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
-
     const caller = accounts[1];
+
+    await utils.assertSolidityThrow(async () => {
+      await like.transferAndCallDelegated(
+        from, to, value, data, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should not be able to do delegated call before setting signature checker');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.setSignatureChecker(sigChecker.address, { from: accounts[1] });
+    }, 'only owner can set signature checker');
+
+    await like.setSignatureChecker(sigChecker.address);
+
     const callResult = await like.transferAndCallDelegated(
       from, to, value, data, maxReward, claimedReward,
       nonce, signature, { from: caller },
@@ -937,6 +969,7 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
 
     // All LIKE are locked, so deploy new contract
     like = await LikeCoin.new(initialAmount);
+    await like.setSignatureChecker(sigChecker.address);
     mock = await TransferAndCallReceiverMock.new(like.address);
   });
 
@@ -1104,6 +1137,7 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const caller = accounts[1];
 
     const anotherLike = await LikeCoin.new(0);
+    await anotherLike.setSignatureChecker(sigChecker.address);
     let nonce = web3Utils.randomHex(32);
     let signature =
       signTransferAndCallDelegated(anotherLike.address, to, value, data, maxReward, nonce, privKey);
@@ -1227,11 +1261,14 @@ contract('LikeCoin delegated switch', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     await like.addTransferAndCallWhitelist(mock.address);
+    sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
   });
 
   it('should process delegated switch properly', async () => {
@@ -1318,11 +1355,14 @@ contract('LikeCoin operator', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
   let mock;
+  let sigChecker;
 
   before(async () => {
     like = await LikeCoin.new(initialAmount);
     mock = await TransferAndCallReceiverMock.new(like.address);
     await like.setOperator(accounts[1]);
+    sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
   });
 
   it('should allow operator to switch delegated', async () => {

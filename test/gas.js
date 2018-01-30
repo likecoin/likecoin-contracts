@@ -26,6 +26,7 @@ const Accounts = require('./accounts.json');
 const web3Abi = require('web3-eth-abi');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
+const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
 const TransferAndCallReceiverMock2 = artifacts.require('./TransferAndCallReceiverMock2.sol');
 
@@ -74,7 +75,7 @@ function encodeMock2(to, value, key) {
   return bytesBuf.join('');
 }
 
-contract('LikeCoin', (accounts) => {
+contract('LikeCoin Gas Estimation', (accounts) => {
   it('Gas for builtin transferMultiple', async () => {
     const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     let addrs = [1, 2, 3, 4, 5].map(i => accounts[i]);
@@ -101,6 +102,8 @@ contract('LikeCoin', (accounts) => {
 
   it('Gas for transferMultipleDelegated', async () => {
     const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
     const from = accounts[0];
     const privKey = Accounts[0].secretKey;
     const maxReward = 0;
@@ -186,6 +189,8 @@ contract('LikeCoin', (accounts) => {
 
   it('Gas for transferAndCallDelegated', async () => {
     const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const sigChecker = await SignatureCheckerImpl.new();
+    await like.setSignatureChecker(sigChecker.address);
     const mock = await TransferAndCallReceiverMock.new(like.address);
     await like.addTransferAndCallWhitelist(mock.address);
     const from = accounts[0];
