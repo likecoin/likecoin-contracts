@@ -115,6 +115,7 @@ contract LikeCrowdsale {
     function () public payable {
         require(now >= start);
         require(now < end);
+        require(!finalized);
         require(like.balanceOf(this) > 0);
         require(msg.value > 0);
         require(kycDone[msg.sender]);
