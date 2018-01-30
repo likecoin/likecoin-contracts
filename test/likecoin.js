@@ -28,6 +28,7 @@ const Accounts = require('./accounts.json');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
+const UserGrowthPool = artifacts.require('./UserGrowthPool.sol');
 
 const { coinsToCoinUnits } = utils;
 
@@ -237,17 +238,21 @@ contract('LikeCoin Basic', (accounts) => {
 
   it('should transfer and lock correctly', async () => {
     const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
-    await like.registerCrowdsales(accounts[1], 1, unlockTime);
+    // For the purpose of setting unlockTime, use arbitrary contract address to call
+    // registerCrowdsales
+    await like.registerCrowdsales(like.address, 1, unlockTime);
     const balance0Before = await like.balanceOf(accounts[0]);
     const balance1 = await like.balanceOf(accounts[1]);
     assert(!balance0Before.eq(0), 'Banalce in accounts[0] is 0, please check test case');
     assert(!balance1.eq(0), 'Banalce in accounts[1] is 0, please check test case');
 
+    assert.notEqual(await like.owner(), accounts[2], 'accounts[2] should not be owner, please check test case.');
     await utils.assertSolidityThrow(async () => {
-      assert.notEqual(await like.owner(), accounts[2], 'accounts[2] should not be owner, please check test case.');
       assert(!(await like.balanceOf(accounts[2])).eq(0), 'accounts[2] has no balance, please check test case.');
       await like.transferAndLock(accounts[1], 1, { from: accounts[2] });
-    }, 'Only crowdsale address or owner can call transferAndLock');
+    }, 'Only crowdsale address, owner or operator can call transferAndLock');
+
+    await like.setOperator(accounts[1]);
 
     const callResult = await like.transferAndLock(accounts[0], balance1, { from: accounts[1] });
     const transferEvent = utils.solidityEvent(callResult, 'Transfer');
@@ -1365,21 +1370,23 @@ contract('LikeCoin operator', (accounts) => {
 
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     await utils.assertSolidityThrow(async () => {
-      await like.registerCrowdsales(accounts[2], 1, now + 100000, { from: accounts[1] });
+      await like.registerCrowdsales(like.address, 1, now + 100000, { from: accounts[1] });
     }, 'Should forbid operator to register crowdsale');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerContributorPool(accounts[2], 1, { from: accounts[1] });
+      await like.registerContributorPool(like.address, 1, { from: accounts[1] });
     }, 'Should forbid operator to register contributor pool');
 
     await utils.assertSolidityThrow(async () => {
-      await like.registerUserGrowthPools([accounts[2]], { from: accounts[1] });
+      await like.registerUserGrowthPools([like.address], { from: accounts[1] });
     }, 'Should forbid operator to register user growth pool');
   });
 
   it('should allow operator to call transferAndLock', async () => {
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-    await like.registerCrowdsales(accounts[2], 1, now + 100000);
+    // For the purpose of setting unlockTime, use arbitrary contract address to call
+    // registerCrowdsales
+    await like.registerCrowdsales(like.address, 1, now + 100000);
     await like.transfer(accounts[1], initialAmount.div(10));
     await like.transfer(accounts[2], initialAmount.div(10));
 
@@ -1398,6 +1405,37 @@ contract('LikeCoin operator', (accounts) => {
   });
 });
 
+contract('LikeCoin register', (accounts) => {
+  it('should restrict registers', async () => {
+    const like = await LikeCoin.new(0);
+
+    const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 10000;
+    await utils.assertSolidityThrow(async () => {
+      await like.registerCrowdsales(accounts[0], 1, unlockTime);
+    }, 'Should forbid registering non-contract address as Crowdsale');
+    await like.registerCrowdsales(like.address, 1, unlockTime);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerCrowdsales(like.address, 1, unlockTime);
+    }, 'Should forbid registering Crowdsale again');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerContributorPool(accounts[0], 1);
+    }, 'Should forbid registering non-contract address as ContributorPool');
+    await like.registerContributorPool(like.address, 1);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerContributorPool(like.address, 1);
+    }, 'Should forbid registering ContributorPool again');
+
+    await utils.assertSolidityThrow(async () => {
+      await like.registerUserGrowthPools([accounts[0], accounts[1]]);
+    }, 'Should forbid registering non-contract addresses as UserGrowthPools');
+    await like.registerUserGrowthPools([like.address]);
+    await utils.assertSolidityThrow(async () => {
+      await like.registerUserGrowthPools([like.address]);
+    }, 'Should forbid registering UserGrowthPools again');
+  });
+});
+
 contract('LikeCoin Events', (accounts) => {
   const initialAmount = coinsToCoinUnits(10000);
   let like;
@@ -1413,29 +1451,32 @@ contract('LikeCoin Events', (accounts) => {
   const crowdsaleAmount = 100000;
   it('should emit Transfer event after minting for crowdsale', async () => {
     const unlockTime = web3.eth.getBlock(web3.eth.blockNumber).timestamp + 1000000;
-    const callResult = await like.registerCrowdsales(accounts[0], crowdsaleAmount, unlockTime);
+    const callResult = await like.registerCrowdsales(like.address, crowdsaleAmount, unlockTime);
     const event = utils.solidityEvent(callResult, 'Transfer');
     assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+    assert.equal(event.args._to, like.address, "Transfer event has wrong value on field '_to'");
     assert(event.args._value.eq(crowdsaleAmount), "Transfer event has wrong value on field '_value'");
   });
 
   const contributorPoolAmount = 200000;
   it('should emit Transfer event after minting for contributor pool', async () => {
-    const callResult = await like.registerContributorPool(accounts[0], contributorPoolAmount);
+    const callResult = await like.registerContributorPool(like.address, contributorPoolAmount);
     const event = utils.solidityEvent(callResult, 'Transfer');
     assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+    assert.equal(event.args._to, like.address, "Transfer event has wrong value on field '_to'");
     assert(event.args._value.eq(contributorPoolAmount), "Transfer event has wrong value on field '_value'");
   });
 
   const userGrowthPoolAmount = 300000;
   it('should emit Transfer event after minting for user growth pool', async () => {
-    await like.registerUserGrowthPools([accounts[0]]);
-    const callResult = await like.mintForUserGrowthPool(userGrowthPoolAmount);
-    const event = utils.solidityEvent(callResult, 'Transfer');
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    const userGrowthPool =
+      await UserGrowthPool.new(like.address, [accounts[0]], 1, now - 100, userGrowthPoolAmount);
+    await like.registerUserGrowthPools([userGrowthPool.address]);
+    await userGrowthPool.mint();
+    const event = await utils.solidityEventPromise(like.Transfer());
     assert.equal(event.args._from, 0x0, "Transfer event has wrong value on field '_from'");
-    assert.equal(event.args._to, accounts[0], "Transfer event has wrong value on field '_to'");
+    assert.equal(event.args._to, userGrowthPool.address, "Transfer event has wrong value on field '_to'");
     assert(event.args._value.eq(userGrowthPoolAmount), "Transfer event has wrong value on field '_value'");
   });
 

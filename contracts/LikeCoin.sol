@@ -290,6 +290,7 @@ contract LikeCoin is ERC20 {
         require(msg.sender == owner);
         require(crowdsaleAddr == 0x0);
         require(_crowdsaleAddr != 0x0);
+        require(_isContract(_crowdsaleAddr));
         require(_privateFundUnlockTime > now);
         require(supply + _value > supply);
         unlockTime = _privateFundUnlockTime;
@@ -303,6 +304,7 @@ contract LikeCoin is ERC20 {
         require(msg.sender == owner);
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
+        require(_isContract(_contributorPoolAddr));
         require(supply + _value > supply);
         contributorPoolAddr = _contributorPoolAddr;
         supply += _value;
@@ -315,6 +317,7 @@ contract LikeCoin is ERC20 {
         require(userGrowthPoolAddrs.length == 0);
         require(_poolAddrs.length > 0);
         for (uint i = 0; i < _poolAddrs.length; ++i) {
+            require(_isContract(_poolAddrs[i]));
             userGrowthPoolAddrs.push(_poolAddrs[i]);
             isUserGrowthPool[_poolAddrs[i]] = true;
         }
