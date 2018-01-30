@@ -78,6 +78,7 @@ contract LikeCrowdsale {
 
     function changePrice(uint256 _newCoinsPerEth) public {
         require(msg.sender == owner);
+        require(_newCoinsPerEth != 0);
         require(_newCoinsPerEth != coinsPerEth);
         require(now < start);
         coinsPerEth = _newCoinsPerEth;
