@@ -91,7 +91,6 @@ contract LikeCoin is ERC20, HasOperator {
         require(_to != 0x0);
         require(now < unlockTime);
         require(msg.sender == crowdsaleAddr || msg.sender == owner || msg.sender == operator);
-        require(balances[msg.sender] >= _value);
         balances[msg.sender] = balances[msg.sender].sub(_value);
         lockedBalances[_to] = lockedBalances[_to].add(_value);
         Transfer(msg.sender, _to, _value);
@@ -100,9 +99,8 @@ contract LikeCoin is ERC20, HasOperator {
     }
 
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
-        require(allowed[_from][msg.sender] >= _value);
+        allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_value);
         _transfer(_from, _to, _value);
-        allowed[_from][msg.sender] -= _value;
         return true;
     }
 
@@ -120,8 +118,7 @@ contract LikeCoin is ERC20, HasOperator {
             total = total.add(value);
             Transfer(_from, addr, value);
         }
-        require(balances[_from] >= total);
-        balances[_from] -= total;
+        balances[_from] = balances[_from].sub(total);
         return true;
     }
 
@@ -247,7 +244,7 @@ contract LikeCoin is ERC20, HasOperator {
         unlockTime = _privateFundUnlockTime;
         crowdsaleAddr = _crowdsaleAddr;
         supply = supply.add(_value);
-        balances[_crowdsaleAddr] += _value;
+        balances[_crowdsaleAddr] = balances[_crowdsaleAddr].add(_value);
         Transfer(0x0, crowdsaleAddr, _value);
     }
 
@@ -258,7 +255,7 @@ contract LikeCoin is ERC20, HasOperator {
         require(_value != 0);
         contributorPoolAddr = _contributorPoolAddr;
         supply = supply.add(_value);
-        balances[contributorPoolAddr] += _value;
+        balances[contributorPoolAddr] = balances[contributorPoolAddr].add(_value);
         Transfer(0x0, contributorPoolAddr, _value);
     }
 
