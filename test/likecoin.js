@@ -836,11 +836,11 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
     const from = accounts[1];
     const privKey = Accounts[1].secretKey;
     const addrs = [2, 3, 4].map(i => accounts[i]);
-    const values = [200, 300, 400];
+    let values = [200, 300, 400];
     const maxReward = coinsToCoinUnits(1);
     const claimedReward = maxReward.sub(1);
     const nonce = web3Utils.randomHex(32);
-    const signature =
+    let signature =
       signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
 
     const caller = accounts[2];
@@ -848,6 +848,16 @@ contract('LikeCoin transferMultipleDelegated', (accounts) => {
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: caller },
     );
+    await utils.assertSolidityThrow(async () => {
+      await like.transferMultipleDelegated(
+        from, addrs, values, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should forbid replaying executed call');
+
+    values = [2, 3, 4];
+    signature =
+      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
     await utils.assertSolidityThrow(async () => {
       await like.transferMultipleDelegated(
         from, addrs, values, maxReward, claimedReward,
@@ -1106,18 +1116,28 @@ contract('LikeCoin transferDelegated', (accounts) => {
     const from = accounts[0];
     const privKey = Accounts[0].secretKey;
     const to = accounts[1];
-    const value = 1;
+    let value = 1;
     const maxReward = coinsToCoinUnits(1);
     const claimedReward = maxReward.sub(1);
     const caller = accounts[2];
     const nonce = web3Utils.randomHex(32);
-    const signature =
+    let signature =
       signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
 
     await like.transferDelegated(
       from, to, value, maxReward, claimedReward,
       nonce, signature, { from: caller },
     );
+    await utils.assertSolidityThrow(async () => {
+      await like.transferDelegated(
+        from, to, value, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should forbid replaying executed call');
+
+    value = 2;
+    signature =
+      signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
     await utils.assertSolidityThrow(async () => {
       await like.transferDelegated(
         from, to, value, maxReward, claimedReward,
@@ -1517,19 +1537,29 @@ contract('LikeCoin transferAndCallDelegated', (accounts) => {
     const from = accounts[0];
     const privKey = Accounts[0].secretKey;
     const to = mock.address;
-    const value = 1;
+    let value = 1;
     const data = '0x1337133713371337133713371337133713371337133713371337133713371337';
     const maxReward = coinsToCoinUnits(1);
     const claimedReward = maxReward.sub(1);
     const caller = accounts[1];
     const nonce = web3Utils.randomHex(32);
-    const signature =
+    let signature =
       signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
 
     await like.transferAndCallDelegated(
       from, to, value, data, maxReward, claimedReward,
       nonce, signature, { from: caller },
     );
+    await utils.assertSolidityThrow(async () => {
+      await like.transferAndCallDelegated(
+        from, to, value, data, maxReward, claimedReward,
+        nonce, signature, { from: caller },
+      );
+    }, 'should forbid replaying executed call');
+
+    value = 2;
+    signature =
+      signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
     await utils.assertSolidityThrow(async () => {
       await like.transferAndCallDelegated(
         from, to, value, data, maxReward, claimedReward,
