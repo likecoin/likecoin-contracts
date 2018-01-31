@@ -17,7 +17,7 @@
 
 /* eslint-env mocha, node */
 /* eslint no-console: off */
-/* global artifacts, contract */
+/* global artifacts, contract, assert, web3 */
 
 const utils = require('./utils.js');
 const web3Utils = require('web3-utils');
@@ -26,6 +26,9 @@ const Accounts = require('./accounts.json');
 const web3Abi = require('web3-eth-abi');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
+const LikeCrowdsale = artifacts.require('./LikeCrowdsale.sol');
+const ContributorPool = artifacts.require('./ContributorPool.sol');
+const CreatorsPool = artifacts.require('./CreatorsPool.sol');
 const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
 const TransferAndCallReceiverMock2 = artifacts.require('./TransferAndCallReceiverMock2.sol');
@@ -88,6 +91,34 @@ function encodeMock2(to, value, key) {
 }
 
 contract('LikeCoin Gas Estimation', (accounts) => {
+  it('Gas for deployment', async () => {
+    await SignatureCheckerImpl.new();
+    let block = web3.eth.getBlock(web3.eth.blockNumber);
+    assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
+    console.log(`Deployed SignatureCheckerImpl, gas used = ${block.gasUsed}`);
+
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    block = web3.eth.getBlock(web3.eth.blockNumber);
+    assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
+    console.log(`Deployed LikeCoin, gas used = ${block.gasUsed}`);
+
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    await LikeCrowdsale.new(like.address, now + 100, now + 1000, 1, 1);
+    block = web3.eth.getBlock(web3.eth.blockNumber);
+    assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
+    console.log(`Deployed LikeCrowdsale, gas used = ${block.gasUsed}`);
+
+    await ContributorPool.new(like.address, 1);
+    block = web3.eth.getBlock(web3.eth.blockNumber);
+    assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
+    console.log(`Deployed ContributorPool, gas used = ${block.gasUsed}`);
+
+    await CreatorsPool.new(like.address, [accounts[0]], 1, now + 100, 1);
+    block = web3.eth.getBlock(web3.eth.blockNumber);
+    assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
+    console.log(`Deployed CreatorsPool, gas used = ${block.gasUsed}`);
+  });
+
   it('Gas for normal transfer', async () => {
     const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     let callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
