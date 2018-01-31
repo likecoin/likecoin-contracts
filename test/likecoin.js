@@ -29,6 +29,7 @@ const Accounts = require('./accounts.json');
 const LikeCoin = artifacts.require('./LikeCoin.sol');
 const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
+const ContributorPool = artifacts.require('./ContributorPool.sol');
 const CreatorsPool = artifacts.require('./CreatorsPool.sol');
 
 const { coinsToCoinUnits } = utils;
@@ -1819,10 +1820,13 @@ contract('LikeCoin Events', (accounts) => {
 
   const contributorPoolAmount = 200000;
   it('should emit Transfer event after minting for contributor pool', async () => {
-    const callResult = await like.registerContributorPool(like.address, contributorPoolAmount);
-    const event = utils.solidityEvent(callResult, 'Transfer');
+    const contributorPool =
+      await ContributorPool.new(like.address, 1, contributorPoolAmount);
+    await like.registerContributorPool(contributorPool.address, contributorPoolAmount);
+    await contributorPool.mint();
+    const event = await utils.solidityEventPromise(like.Transfer());
     assert.equal(event.args.from, 0x0, "Transfer event has wrong value on field 'from'");
-    assert.equal(event.args.to, like.address, "Transfer event has wrong value on field 'to'");
+    assert.equal(event.args.to, contributorPool.address, "Transfer event has wrong value on field 'to'");
     assert(event.args.value.eq(contributorPoolAmount), "Transfer event has wrong value on field 'value'");
   });
 

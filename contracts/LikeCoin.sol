@@ -38,6 +38,7 @@ contract LikeCoin is ERC20, HasOperator {
 
     address public crowdsaleAddr = 0x0;
     address public contributorPoolAddr = 0x0;
+    uint256 public contributorPoolMintQuota = 0;
     address[] public creatorsPoolAddrs;
     mapping(address => bool) isCreatorsPool;
     uint256 public creatorsPoolMintQuota = 0;
@@ -249,15 +250,22 @@ contract LikeCoin is ERC20, HasOperator {
         Transfer(0x0, crowdsaleAddr, _value);
     }
 
-    function registerContributorPool(address _contributorPoolAddr, uint256 _value) onlyOwner public {
+    function registerContributorPool(address _contributorPoolAddr, uint256 _mintLimit) onlyOwner public {
         require(contributorPoolAddr == 0x0);
         require(_contributorPoolAddr != 0x0);
         require(_isContract(_contributorPoolAddr));
-        require(_value != 0);
+        require(_mintLimit != 0);
         contributorPoolAddr = _contributorPoolAddr;
+        contributorPoolMintQuota = _mintLimit;
+    }
+
+    function mintForContributorPool(uint256 _value) public {
+        require(msg.sender == contributorPoolAddr);
+        require(_value != 0);
+        contributorPoolMintQuota = contributorPoolMintQuota.sub(_value);
         supply = supply.add(_value);
-        balances[contributorPoolAddr] = balances[contributorPoolAddr].add(_value);
-        Transfer(0x0, contributorPoolAddr, _value);
+        balances[msg.sender] = balances[msg.sender].add(_value);
+        Transfer(0x0, msg.sender, _value);
     }
 
     function registerCreatorsPools(address[] _poolAddrs, uint256 _mintLimit) onlyOwner public {

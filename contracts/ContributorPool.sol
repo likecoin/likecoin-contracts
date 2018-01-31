@@ -17,66 +17,31 @@
 
 pragma solidity ^0.4.18;
 
-import "zeppelin-solidity/contracts/math/SafeMath.sol";
 import "zeppelin-solidity/contracts/ownership/Claimable.sol";
 import "./LikeCoin.sol";
 
 contract ContributorPool is Claimable {
-    using SafeMath for uint256;
-
     LikeCoin public like = LikeCoin(0x0);
-    uint256 public lockDuration = 0;
-    uint256 public lockedCoin = 0;
+    uint public mintCoolDown = 0;
+    uint256 public mintValue = 0;
+    uint public nextMintTime = 0;
 
-    uint64 nextId = 1;
-
-    struct GiveInfo {
-        uint64 id;
-        address to;
-        uint256 value;
-        uint256 unlockTime;
-    }
-    mapping (uint64 => GiveInfo) giveInfo;
-    event Give(uint64 indexed _id, address _to, uint256 _value);
-    event Claimed(uint64 indexed _id);
-
-    function ContributorPool(address _likeAddr, uint256 _lockDuration) public {
+    function ContributorPool(address _likeAddr, uint _mintCoolDown, uint256 _mintValue) public {
+        require(_mintValue > 0);
+        require(_mintCoolDown > 0);
         like = LikeCoin(_likeAddr);
-        lockDuration = _lockDuration;
+        mintCoolDown = _mintCoolDown;
+        mintValue = _mintValue;
     }
 
-    function getRemainingLikeCoins() public constant returns (uint256) {
-        return like.balanceOf(address(this)) - lockedCoin;
+    function mint() onlyOwner public {
+        require(now > nextMintTime);
+        nextMintTime = now + mintCoolDown;
+        like.mintForContributorPool(mintValue);
     }
 
-    function getUnlockTime(uint64 id) public constant returns (uint256) {
-        return giveInfo[id].unlockTime;
-    }
-
-    function _nextId() internal returns (uint64 id) {
-        id = nextId;
-        nextId += 1;
-        return id;
-    }
-
-    function give(address _to, uint256 _value) onlyOwner public {
+    function transfer(address _to, uint256 _value) onlyOwner public {
         require(_value > 0);
-        require(getRemainingLikeCoins() >= _value);
-        uint64 id = _nextId();
-        giveInfo[id] = GiveInfo(id, _to, _value, now + lockDuration);
-        lockedCoin = lockedCoin.add(_value);
-        Give(id, _to, _value);
-    }
-
-    function claim(uint64 id) public {
-        require(giveInfo[id].id == id);
-        address claimer = msg.sender;
-        require(giveInfo[id].to == claimer);
-        require(giveInfo[id].unlockTime < now);
-        uint256 value = giveInfo[id].value;
-        lockedCoin = lockedCoin.sub(value);
-        delete giveInfo[id];
-        like.transfer(claimer, value);
-        Claimed(id);
+        like.transfer(_to, _value);
     }
 }
