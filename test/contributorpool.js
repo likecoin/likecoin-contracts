@@ -381,7 +381,7 @@ contract('ContributorPool:transferOwnership', (accounts) => {
   });
 
   it('check that all gives are valid', async () => {
-    await utils.testrpcIncreaseTime(lockTime);
+    await utils.testrpcIncreaseTime(lockTime + 1);
     await cp.claim(giveId1, { from: accounts[1] });
     assert((await like.balanceOf(accounts[1])).eq(1), '1 units of LIKE should be in account[1]');
     await cp.claim(giveId2, { from: accounts[2] });
