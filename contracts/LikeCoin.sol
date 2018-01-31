@@ -155,6 +155,7 @@ contract LikeCoin is ERC20, HasOperator {
 
     modifier isDelegated(address _from, uint256 _maxReward, uint256 _claimedReward, uint256 _nonce) {
         require(allowDelegate);
+        require(_from != 0x0);
         require(_claimedReward <= _maxReward);
         require(!usedNonce[_from][_nonce]);
         usedNonce[_from][_nonce] = true;
