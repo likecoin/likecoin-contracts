@@ -19,7 +19,7 @@ pragma solidity ^0.4.18;
 
 import "./LikeCoin.sol";
 
-contract UserGrowthPool {
+contract CreatorsPool {
     LikeCoin public like = LikeCoin(0x0);
     address[] public owners;
     uint8 public threshold = 0;
@@ -60,7 +60,7 @@ contract UserGrowthPool {
     mapping (uint64 => TransferInfo) transferInfo;
     mapping (uint64 => SetOwnersInfo) setOwnersInfo;
 
-    function UserGrowthPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) public {
+    function CreatorsPool(address _likeAddr, address[] _owners, uint8 _threshold, uint _mintTime, uint256 _mintValue) public {
         require(_owners.length < 256);
         require(_owners.length > 0);
         require(_threshold > 0);
@@ -88,7 +88,7 @@ contract UserGrowthPool {
 
     function mint() public {
         require(now >= mintTime);
-        like.mintForUserGrowthPool(mintValue);
+        like.mintForCreatorsPool(mintValue);
     }
 
     function proposeTransfer(address _to, uint256 _value) public {

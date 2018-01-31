@@ -1,4 +1,4 @@
-//    Copyright (C) 2017 LikeCoin Foundation Limited
+//    Copyright (C) 2018 LikeCoin Foundation Limited
 //
 //    This file is part of LikeCoin Smart Contract.
 //
@@ -18,30 +18,16 @@
 pragma solidity ^0.4.18;
 
 import "zeppelin-solidity/contracts/ownership/Claimable.sol";
-import "./LikeCoin.sol";
 
-contract ContributorPool is Claimable {
-    LikeCoin public like = LikeCoin(0x0);
-    uint public mintCoolDown = 0;
-    uint256 public mintValue = 0;
-    uint public nextMintTime = 0;
+contract HasOperator is Claimable {
+    address public operator;
 
-    function ContributorPool(address _likeAddr, uint _mintCoolDown, uint256 _mintValue) public {
-        require(_mintValue > 0);
-        require(_mintCoolDown > 0);
-        like = LikeCoin(_likeAddr);
-        mintCoolDown = _mintCoolDown;
-        mintValue = _mintValue;
+    function setOperator(address _operator) onlyOwner public {
+        operator = _operator;
     }
 
-    function mint() onlyOwner public {
-        require(now > nextMintTime);
-        nextMintTime = now + mintCoolDown;
-        like.mintForContributorPool(mintValue);
-    }
-
-    function transfer(address _to, uint256 _value) onlyOwner public {
-        require(_value > 0);
-        like.transfer(_to, _value);
+    modifier ownerOrOperator {
+        require(msg.sender == owner || msg.sender == operator);
+        _;
     }
 }

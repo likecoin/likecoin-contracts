@@ -85,18 +85,18 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, { from: accounts[1] });
     }, 'should forbid accounts[1] to register crowdsale contract');
 
-    await like.changeOwner(accounts[1], { from: accounts[0] });
+    await like.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, { from: accounts[1] });
     }, 'should forbid pending owner accounts[1] to register crowdsale contract');
 
-    await like.acceptOwnership({ from: accounts[1] });
+    await like.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(crowdsale.address, hardCap, unlockTime, { from: accounts[0] });
     }, 'should forbid accounts[0] to register crowdsale contract after changing owner');
     // change back
-    await like.changeOwner(accounts[0], { from: accounts[1] });
-    await like.acceptOwnership({ from: accounts[0] });
+    await like.transferOwnership(accounts[0], { from: accounts[1] });
+    await like.claimOwnership({ from: accounts[0] });
   });
 
   it(`should mint ${hardCap.toFixed()} units of coins`, async () => {
@@ -158,21 +158,22 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await crowdsale.addPrivateFund(accounts[7], remaining, { from: accounts[1] });
     }, 'should forbid adding private fund from accounts[1]');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.addPrivateFund(accounts[7], remaining, { from: accounts[1] });
     }, 'should forbid adding private fund from pending owner accounts[1]');
 
-    const callResult = await crowdsale.acceptOwnership({ from: accounts[1] });
-    const ownershipChangedEvent = utils.solidityEvent(callResult, 'OwnershipChanged');
-    assert.equal(ownershipChangedEvent.args._newOwner, accounts[1], "OwnershipChanged event has wrong value on field '_newOwner'");
+    const callResult = await crowdsale.claimOwnership({ from: accounts[1] });
+    const ownershipTransferredEvent = utils.solidityEvent(callResult, 'OwnershipTransferred');
+    assert.equal(ownershipTransferredEvent.args.previousOwner, accounts[0], "OwnershipTransferred event has wrong value on field 'previousOwner'");
+    assert.equal(ownershipTransferredEvent.args.newOwner, accounts[1], "OwnershipTransferred event has wrong value on field 'newOwner'");
     await utils.assertSolidityThrow(async () => {
       await crowdsale.addPrivateFund(accounts[7], remaining, { from: accounts[0] });
     }, 'should forbid adding private fund from old owner accounts[0]');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
   });
 
   it('should lock private fund until unlock time', async () => {
@@ -190,19 +191,19 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await crowdsale.transferLike(accounts[0], 1, { from: accounts[1] });
     }, 'Calling transferLike from non-owner should be forbidden');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.transferLike(accounts[0], 1, { from: accounts[1] });
     }, 'Calling transferLike from pending owner should be forbidden');
 
-    await crowdsale.acceptOwnership({ from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.transferLike(accounts[0], 1, { from: accounts[0] });
     }, 'Calling transferLike from old owner should be forbidden');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
   });
 
   it('should be able to transfer LIKE before crowdsale starts', async () => {
@@ -258,19 +259,19 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await crowdsale.registerKYC([accounts[2]], { from: accounts[1] });
     }, 'Calling registerKYC from non-owner should be forbidden');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.registerKYC([accounts[2]], { from: accounts[1] });
     }, 'Calling registerKYC from pending owner should be forbidden');
 
-    await crowdsale.acceptOwnership({ from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.registerKYC([accounts[2]], { from: accounts[0] });
     }, 'Calling registerKYC from old owner should be forbidden');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
   });
 
   it('should allow buying coins after KYC', async () => {
@@ -312,6 +313,8 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
   });
 
   it('should calculate bonus correctly', async () => {
+    await crowdsale.registerKYC([accounts[5], accounts[6], accounts[7], accounts[8]]);
+
     const registerReferrerEvent1 = utils.solidityEvent(await crowdsale.registerReferrer(accounts[3], accounts[7]), 'RegisterReferrer');
     assert.equal(registerReferrerEvent1.args._addr, accounts[3], "registerReferrer event has wrong value on field '_addr'");
     assert.equal(registerReferrerEvent1.args._referrer, accounts[7], "registerReferrer event has wrong value on field '_referrer'");
@@ -372,10 +375,18 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
     assert(remaining3.eq(remaining2.sub(account4Coins).sub(account1ReferrerBonus)), 'Wrong remaining coins after accounts[4] buying coins');
   });
 
-  it('should forbid setting another referrer', async () => {
+  it('should restrict referrer', async () => {
     await utils.assertSolidityThrow(async () => {
-      await crowdsale.registerReferrer(accounts[3], accounts[8]);
+      await crowdsale.registerReferrer(accounts[3], accounts[5]);
     }, 'accounts[3] already has referrer, re-register should be forbidden');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerReferrer(accounts[4], accounts[4]);
+    }, 'should forbid setting one as his / her own referrer');
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.registerReferrer(accounts[4], accounts[9]);
+    }, 'should require referrer to finish KYC');
   });
 
   it('should forbid non-owner to set referrer', async () => {
@@ -383,19 +394,19 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await crowdsale.registerReferrer(accounts[1], accounts[9], { from: accounts[1] });
     }, 'should forbid non-owner accounts[1] to set referrer');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.registerReferrer(accounts[1], accounts[9], { from: accounts[1] });
     }, 'should forbid pending owner accounts[1] to set referrer');
 
-    await crowdsale.acceptOwnership({ from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.registerReferrer(accounts[1], accounts[9], { from: accounts[0] });
     }, 'should forbid old owner accounts[0] to set referrer');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
   });
 
   it('should forbid buying 0 coins', async () => {
@@ -438,19 +449,19 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
       await crowdsale.finalize({ from: accounts[1] });
     }, 'Calling finalize from non-owner should be forbidden');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.finalize({ from: accounts[1] });
     }, 'Calling finalize from pending owner should be forbidden');
 
-    await crowdsale.acceptOwnership({ from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.finalize({ from: accounts[0] });
     }, 'Calling finalize from old owner should be forbidden');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
   });
 
   it('should be able to transfer LIKE after crowdsale ends', async () => {
@@ -483,8 +494,9 @@ contract('LikeCoin Crowdsale 1', (accounts) => {
   });
 
   it('should forbid registering another crowdsale contract', async () => {
+    const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const anotherCrowdsale =
-      await LikeCrowdsale.new(like.address, start, end, coinsPerEth, referrerBonusPercent);
+      await LikeCrowdsale.new(like.address, now + 10, now + 100, coinsPerEth, referrerBonusPercent);
     await utils.assertSolidityThrow(async () => {
       await like.registerCrowdsales(anotherCrowdsale.address, hardCap, unlockTime);
     }, 'Registering another crowdsale contract should be forbidden');
@@ -550,23 +562,27 @@ contract('LikeCoin Crowdsale 2', (accounts) => {
       await crowdsale.changePrice(coinsPerEth, { from: accounts[1] });
     }, 'Should not allow non-owner to change price');
 
-    await crowdsale.changeOwner(accounts[1], { from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[1], { from: accounts[0] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.changePrice(coinsPerEth, { from: accounts[1] });
     }, 'Should not allow pending owner to change price');
 
-    await crowdsale.acceptOwnership({ from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[1] });
     await utils.assertSolidityThrow(async () => {
       await crowdsale.changePrice(coinsPerEth, { from: accounts[0] });
     }, 'Should not allow old owner to change price');
 
     // change back
-    await crowdsale.changeOwner(accounts[0], { from: accounts[1] });
-    await crowdsale.acceptOwnership({ from: accounts[0] });
+    await crowdsale.transferOwnership(accounts[0], { from: accounts[1] });
+    await crowdsale.claimOwnership({ from: accounts[0] });
+
+    await utils.assertSolidityThrow(async () => {
+      await crowdsale.changePrice(0, { from: accounts[0] });
+    }, 'Should not allow new price to be 0');
 
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     await utils.testrpcIncreaseTime((start - now) + 1);
-    await crowdsale.registerKYC([accounts[1], accounts[2]]);
+    await crowdsale.registerKYC([accounts[1], accounts[2], accounts[3]]);
     await web3.eth.sendTransaction({
       from: accounts[1],
       to: crowdsale.address,
@@ -670,7 +686,7 @@ contract('LikeCoin Crowdsale operator', (accounts) => {
 
   it('should limit operator permission', async () => {
     await utils.assertSolidityThrow(async () => {
-      await crowdsale.changeOwner(accounts[2], { from: accounts[1] });
+      await crowdsale.transferOwnership(accounts[2], { from: accounts[1] });
     }, 'Should forbid operator to change owner');
 
     await utils.assertSolidityThrow(async () => {
@@ -703,7 +719,7 @@ contract('LikeCoin Crowdsale operator', (accounts) => {
       await crowdsale.registerKYC([accounts[3]], { from: accounts[1] });
     }, 'Should forbid old operator to register KYC');
 
-    await crowdsale.registerKYC([accounts[3]], { from: accounts[2] });
+    await crowdsale.registerKYC([accounts[3], accounts[4], accounts[5]], { from: accounts[2] });
   });
 
   it('should allow operator to register referrer', async () => {

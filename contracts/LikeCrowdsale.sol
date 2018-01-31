@@ -17,12 +17,13 @@
 
 pragma solidity ^0.4.18;
 
+import "zeppelin-solidity/contracts/math/SafeMath.sol";
 import "./LikeCoin.sol";
+import "./HasOperator.sol";
 
-contract LikeCrowdsale {
-    address public owner = 0x0;
-    address public pendingOwner = 0x0;
-    address public operator = 0x0;
+contract LikeCrowdsale is HasOperator {
+    using SafeMath for uint256;
+
     LikeCoin public like = LikeCoin(0x0);
     uint public start = 0;
     uint public end = 0;
@@ -34,7 +35,6 @@ contract LikeCrowdsale {
 
     bool finalized = false;
 
-    event OwnershipChanged(address _newOwner);
     event PriceChanged(uint256 _newPrice);
     event AddPrivateFund(address indexed _addr, uint256 _value);
     event RegisterKYC(address indexed _addr);
@@ -47,6 +47,8 @@ contract LikeCrowdsale {
     function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint8 _referrerBonusPercent) public {
         require(_coinsPerEth != 0);
         require(_referrerBonusPercent != 0);
+        require(now < _start);
+        require(_start < _end);
         owner = msg.sender;
         like = LikeCoin(_likeAddr);
         start = _start;
@@ -55,53 +57,33 @@ contract LikeCrowdsale {
         referrerBonusPercent = _referrerBonusPercent;
     }
 
-    function changeOwner(address _pendingOwner) public {
-        require(msg.sender == owner);
-        require(_pendingOwner != owner);
-        pendingOwner = _pendingOwner;
-    }
-
-    function acceptOwnership() public {
-        require(msg.sender == pendingOwner);
-        owner = pendingOwner;
-        pendingOwner = 0x0;
-        OwnershipChanged(owner);
-    }
-
-    function setOperator(address _operator) public {
-        require(msg.sender == owner);
-        require(_operator != operator);
-        operator = _operator;
-    }
-
-    function changePrice(uint256 _newCoinsPerEth) public {
-        require(msg.sender == owner);
+    function changePrice(uint256 _newCoinsPerEth) onlyOwner public {
+        require(_newCoinsPerEth != 0);
         require(_newCoinsPerEth != coinsPerEth);
         require(now < start);
         coinsPerEth = _newCoinsPerEth;
         PriceChanged(_newCoinsPerEth);
     }
 
-    function addPrivateFund(address _addr, uint256 _value) public {
-        require(msg.sender == owner);
+    function addPrivateFund(address _addr, uint256 _value) onlyOwner public {
         require(now < start);
         require(_value > 0);
-        require(like.balanceOf(this) >= _value);
         like.transferAndLock(_addr, _value);
         AddPrivateFund(_addr, _value);
     }
 
-    function registerKYC(address[] _customerAddrs) public {
-        require(msg.sender == owner || msg.sender == operator);
+    function registerKYC(address[] _customerAddrs) ownerOrOperator public {
         for (uint32 i = 0; i < _customerAddrs.length; ++i) {
             kycDone[_customerAddrs[i]] = true;
             RegisterKYC(_customerAddrs[i]);
         }
     }
 
-    function registerReferrer(address _addr, address _referrer) public {
-        require(msg.sender == owner || msg.sender == operator);
+    function registerReferrer(address _addr, address _referrer) ownerOrOperator public {
         require(referrer[_addr] == 0x0);
+        require(_referrer != 0x0);
+        require(_addr != _referrer);
+        require(kycDone[_referrer]);
         referrer[_addr] = _referrer;
         RegisterReferrer(_addr, _referrer);
     }
@@ -109,32 +91,27 @@ contract LikeCrowdsale {
     function () public payable {
         require(now >= start);
         require(now < end);
-        require(like.balanceOf(this) > 0);
+        require(!finalized);
         require(msg.value > 0);
         require(kycDone[msg.sender]);
-        uint256 coins = coinsPerEth * msg.value;
-        require(coins / msg.value == coinsPerEth);
+        uint256 coins = coinsPerEth.mul(msg.value);
         like.transfer(msg.sender, coins);
         Purchase(msg.sender, msg.value, coins);
         if (referrer[msg.sender] != 0x0) {
-            uint256 bonusEnlarged = coins * referrerBonusPercent;
-            require(bonusEnlarged / referrerBonusPercent == coins);
-            uint256 bonus = bonusEnlarged / 100;
+            uint256 bonus = coins.mul(referrerBonusPercent).div(100);
             like.transfer(referrer[msg.sender], bonus);
             ReferrerBonus(referrer[msg.sender], msg.sender, bonus);
         }
     }
 
-    function transferLike(address _to, uint256 _value) public {
-        require(msg.sender == owner);
+    function transferLike(address _to, uint256 _value) onlyOwner public {
         require(now < start || now >= end);
         like.transfer(_to, _value);
         LikeTransfer(_to, _value);
     }
 
-    function finalize() public {
+    function finalize() ownerOrOperator public {
         require(!finalized);
-        require(msg.sender == owner || msg.sender == operator);
         require(now >= start);
         uint256 remainingCoins = like.balanceOf(this);
         require(now >= end || remainingCoins == 0);
