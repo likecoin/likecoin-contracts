@@ -43,7 +43,7 @@ contract('ContributorPool:give', (accounts) => {
   let airDropAmount = new BigNumber(0);
 
   before(async () => {
-    like = await LikeCoin.new(contributorAmount);
+    like = await LikeCoin.new(contributorAmount, 0x0, 0x0);
     cp = await ContributorPool.new(like.address, owners, lockTime, threshold);
   });
 
