@@ -92,12 +92,12 @@ function encodeMock2(to, value, key) {
 
 contract('LikeCoin Gas Estimation', (accounts) => {
   it('Gas for deployment', async () => {
-    await SignatureCheckerImpl.new();
+    const sigChecker = await SignatureCheckerImpl.new();
     let block = web3.eth.getBlock(web3.eth.blockNumber);
     assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
     console.log(`Deployed SignatureCheckerImpl, gas used = ${block.gasUsed}`);
 
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, sigChecker.address);
     block = web3.eth.getBlock(web3.eth.blockNumber);
     assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
     console.log(`Deployed LikeCoin, gas used = ${block.gasUsed}`);
@@ -120,7 +120,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for normal transfer', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, 0x0);
     let callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
     console.log(`Normal transfer, first time gas used = ${callResult.receipt.gasUsed}`);
     callResult = await like.transfer(accounts[1], coinsToCoinUnits(100));
@@ -128,9 +128,8 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferDelegated', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     const sigChecker = await SignatureCheckerImpl.new();
-    await like.setSignatureChecker(sigChecker.address);
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, sigChecker.address);
     const from = accounts[0];
     const privKey = Accounts[0].secretKey;
     const to = accounts[1];
@@ -156,7 +155,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferMultiple', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, 0x0);
     let addrs = [1, 2, 3, 4, 5].map(i => accounts[i]);
     let values = [1, 2, 3, 4, 5].map(n => coinsToCoinUnits(n * 100));
     let callResult = await like.transferMultiple(addrs, values);
@@ -180,9 +179,8 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferMultipleDelegated', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     const sigChecker = await SignatureCheckerImpl.new();
-    await like.setSignatureChecker(sigChecker.address);
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, sigChecker.address);
     const from = accounts[0];
     const privKey = Accounts[0].secretKey;
     const maxReward = 0;
@@ -254,7 +252,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferAndCall', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, 0x0);
     const mock = await TransferAndCallReceiverMock.new(like.address);
     await like.addTransferAndCallWhitelist(mock.address);
     const to = mock.address;
@@ -267,9 +265,8 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferAndCallDelegated', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
     const sigChecker = await SignatureCheckerImpl.new();
-    await like.setSignatureChecker(sigChecker.address);
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, sigChecker.address);
     const mock = await TransferAndCallReceiverMock.new(like.address);
     await like.addTransferAndCallWhitelist(mock.address);
     const from = accounts[0];
@@ -298,7 +295,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
   });
 
   it('Gas for transferAndCall (Mock 2)', async () => {
-    const like = await LikeCoin.new(coinsToCoinUnits(1000000));
+    const like = await LikeCoin.new(coinsToCoinUnits(1000000), 0x0, 0x0);
     const mock = await TransferAndCallReceiverMock.new(like.address);
     const mock2 = await TransferAndCallReceiverMock2.new(like.address, mock.address);
     await like.addTransferAndCallWhitelist(mock2.address);
