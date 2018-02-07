@@ -63,7 +63,7 @@ contract('LikeCoin Creators Pools', (accounts) => {
     await utils.testrpcIncreaseTime(1);
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const start = now + 1000;
-    like = await LikeCoin.new(0);
+    like = await LikeCoin.new(0, 0x0, 0x0);
     const keys = Object.keys(mintValues);
     for (let k = 0; k < keys.length; k += 1) {
       const i = keys[k];
@@ -526,7 +526,7 @@ contract('LikeCoin Creators Pools Overflow', (accounts) => {
     await utils.testrpcIncreaseTime(1);
     const mintValue0 = new BigNumber(2).pow(256).sub(2);
     const mintValue1 = 1;
-    const like = await LikeCoin.new(1);
+    const like = await LikeCoin.new(1, 0x0, 0x0);
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const mintTime = now + 1000;
     const pool0 = await CreatorsPool.new(like.address, [accounts[0]], 1, mintTime, mintValue0);
@@ -545,7 +545,7 @@ contract('LikeCoin Creators Pools Invalid IDs', (accounts) => {
     // The blocktime of next block could be affected by snapshot and revert, so mine the next block
     // immediately by calling testrpcIncreaseTime
     await utils.testrpcIncreaseTime(1);
-    const like = await LikeCoin.new(0);
+    const like = await LikeCoin.new(0, 0x0, 0x0);
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     const mintTime = now + 1000;
     const pool = await CreatorsPool.new(like.address, [accounts[0]], 1, mintTime, mintValues[0]);

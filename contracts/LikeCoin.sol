@@ -45,6 +45,8 @@ contract LikeCoin is ERC20, HasOperator {
     mapping(address => uint256) public lockedBalances;
     uint public unlockTime = 0;
     SignatureChecker public signatureChecker = SignatureChecker(0x0);
+    bool public signatureCheckerFreezed = false;
+    address public signatureOwner = 0x0;
     bool public allowDelegate = true;
     mapping (address => mapping (uint256 => bool)) public usedNonce;
     mapping (address => bool) public transferAndCallWhitelist;
@@ -52,9 +54,11 @@ contract LikeCoin is ERC20, HasOperator {
     event Lock(address indexed _addr, uint256 _value);
     event SignatureCheckerChanged(address _newSignatureChecker);
 
-    function LikeCoin(uint256 _initialSupply) public {
+    function LikeCoin(uint256 _initialSupply, address _signatureOwner, address _sigCheckerAddr) public {
         supply = _initialSupply;
         balances[owner] = _initialSupply;
+        signatureOwner = _signatureOwner;
+        signatureChecker = SignatureChecker(_sigCheckerAddr);
         Transfer(0x0, owner, _initialSupply);
     }
 
@@ -148,10 +152,17 @@ contract LikeCoin is ERC20, HasOperator {
     }
 
     function setSignatureChecker(address _sigCheckerAddr) public {
-        require(msg.sender == owner);
+        require(msg.sender == signatureOwner);
+        require(!signatureCheckerFreezed);
         require(signatureChecker != _sigCheckerAddr);
         signatureChecker = SignatureChecker(_sigCheckerAddr);
         SignatureCheckerChanged(_sigCheckerAddr);
+    }
+
+    function freezeSignatureChecker() public {
+        require(msg.sender == signatureOwner);
+        require(!signatureCheckerFreezed);
+        signatureCheckerFreezed = true;
     }
 
     modifier isDelegated(address _from, uint256 _maxReward, uint256 _claimedReward, uint256 _nonce) {

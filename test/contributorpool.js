@@ -36,7 +36,7 @@ contract('ContributorPool', (accounts) => {
   let cp;
 
   before(async () => {
-    like = await LikeCoin.new(0);
+    like = await LikeCoin.new(0, 0x0, 0x0);
     cp = await ContributorPool.new(like.address, mintCoolDown, mintValue);
   });
 
