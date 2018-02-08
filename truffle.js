@@ -7,4 +7,10 @@ module.exports = {
       gas: '6000000',
     },
   },
+  solc: {
+    optimizer: {
+      enabled: true,
+      runs: 200,
+    },
+  },
 };
