@@ -28,25 +28,20 @@ contract LikeCrowdsale is HasOperator {
     uint public start = 0;
     uint public end = 0;
     uint256 public coinsPerEth = 0;
-    uint256 public referrerBonusPercent = 0;
 
     mapping (address => bool) public kycDone;
-    mapping (address => address) public referrer;
 
     bool finalized = false;
 
     event PriceChanged(uint256 _newPrice);
     event AddPrivateFund(address indexed _addr, uint256 _value);
     event RegisterKYC(address indexed _addr);
-    event RegisterReferrer(address indexed _addr, address indexed _referrer);
     event Purchase(address indexed _addr, uint256 _ethers, uint256 _coins);
-    event ReferrerBonus(address indexed _referrer, address indexed _buyer, uint256 _bonus);
     event LikeTransfer(address indexed _to, uint256 _value);
     event Finalize();
 
-    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth, uint8 _referrerBonusPercent) public {
+    function LikeCrowdsale(address _likeAddr, uint _start, uint _end, uint256 _coinsPerEth) public {
         require(_coinsPerEth != 0);
-        require(_referrerBonusPercent != 0);
         require(now < _start);
         require(_start < _end);
         owner = msg.sender;
@@ -54,7 +49,6 @@ contract LikeCrowdsale is HasOperator {
         start = _start;
         end = _end;
         coinsPerEth = _coinsPerEth;
-        referrerBonusPercent = _referrerBonusPercent;
     }
 
     function changePrice(uint256 _newCoinsPerEth) onlyOwner public {
@@ -79,15 +73,6 @@ contract LikeCrowdsale is HasOperator {
         }
     }
 
-    function registerReferrer(address _addr, address _referrer) ownerOrOperator public {
-        require(referrer[_addr] == 0x0);
-        require(_referrer != 0x0);
-        require(_addr != _referrer);
-        require(kycDone[_referrer]);
-        referrer[_addr] = _referrer;
-        RegisterReferrer(_addr, _referrer);
-    }
-
     function () public payable {
         require(now >= start);
         require(now < end);
@@ -97,11 +82,6 @@ contract LikeCrowdsale is HasOperator {
         uint256 coins = coinsPerEth.mul(msg.value);
         like.transfer(msg.sender, coins);
         Purchase(msg.sender, msg.value, coins);
-        if (referrer[msg.sender] != 0x0) {
-            uint256 bonus = coins.mul(referrerBonusPercent).div(100);
-            like.transfer(referrer[msg.sender], bonus);
-            ReferrerBonus(referrer[msg.sender], msg.sender, bonus);
-        }
     }
 
     function transferLike(address _to, uint256 _value) onlyOwner public {
