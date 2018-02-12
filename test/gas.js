@@ -103,7 +103,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`Deployed LikeCoin, gas used = ${block.gasUsed}`);
 
     const now = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
-    await LikeCrowdsale.new(like.address, now + 100, now + 1000, 1, 1);
+    await LikeCrowdsale.new(like.address, now + 100, now + 1000, 1);
     block = web3.eth.getBlock(web3.eth.blockNumber);
     assert.equal(block.transactions.length, 1, 'Wrong number of transactions in latest block');
     console.log(`Deployed LikeCrowdsale, gas used = ${block.gasUsed}`);
