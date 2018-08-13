@@ -3,9 +3,9 @@ jobs:
   build:
     working_directory: ~/like-token-contracts
     docker:
-      - image: node:8-alpine
+      - image: node:8
     steps:
-      - run: apk add --no-cache git gzip tar make gcc g++ python
+      - run: yarn global add npm@6.0.1
       - checkout
       - restore_cache:
           key: like-token-contracts-{{ checksum "package.json" }}
