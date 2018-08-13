@@ -1,6 +1,8 @@
 # LikeCoin Smart Contracts
 
-This is the repo of the Ethereum smart contracts related to the [LikeCoin](https://like.community/).
+[![CircleCI](https://circleci.com/gh/likecoin/likecoin-contracts.svg?style=svg)](https://circleci.com/gh/likecoin/likecoin-contracts)
+
+This is the repo of the Ethereum smart contracts related to the [LikeCoin](https://like.co/).
 
 The contracts are tested using the [Truffle](http://truffleframework.com/) framework.
 

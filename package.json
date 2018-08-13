@@ -27,9 +27,9 @@
     "bignumber.js": "^4.1.0",
     "eth-lib": "^0.2.5",
     "ethereumjs-testrpc": "^6.0.3",
-    "truffle": "^4.0.1",
-    "web3-eth-abi": "^1.0.0-beta.27",
-    "web3-utils": "^1.0.0-beta.27",
+    "truffle": "^4.1.13",
+    "web3-eth-abi": "^1.0.0-beta.35",
+    "web3-utils": "^1.0.0-beta.35",
     "zeppelin-solidity": "1.6.0"
   },
   "devDependencies": {
