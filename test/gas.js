@@ -21,7 +21,6 @@
 
 const utils = require('./utils.js');
 const web3Utils = require('web3-utils');
-const AccountLib = require('eth-lib/lib/account');
 const Accounts = require('./accounts.json');
 const web3Abi = require('web3-eth-abi');
 const ethUtil = require('ethereumjs-util');
@@ -44,16 +43,6 @@ const typedData = {
     verifyingContract: '0x02F61Fd266DA6E8B102D4121f5CE7b992640CF98',
   },
 };
-
-function signTypedCall(signData, privKey) {
-  const paramSignatures = signData.map(item => ({ type: 'string', value: `${item.type} ${item.name}` }));
-  const params = signData.map(item => ({ type: item.type, value: item.value }));
-  const hash = web3Utils.soliditySha3(
-    { type: 'bytes32', value: web3Utils.soliditySha3(...paramSignatures) },
-    { type: 'bytes32', value: web3Utils.soliditySha3(...params) },
-  );
-  return AccountLib.sign(hash, privKey);
-}
 
 function signTransferDelegated(likeAddr, to, value, maxReward, nonce, privKey) {
   const signData = {
