@@ -26,7 +26,9 @@
   "dependencies": {
     "bignumber.js": "^4.1.0",
     "eth-lib": "^0.2.5",
+    "ethereumjs-abi": "^0.6.5",
     "ethereumjs-testrpc": "^6.0.3",
+    "ethereumjs-util": "^5.2.0",
     "truffle": "^4.1.13",
     "web3-eth-abi": "^1.0.0-beta.35",
     "web3-utils": "^1.0.0-beta.35",

@@ -24,6 +24,7 @@ const web3Utils = require('web3-utils');
 const AccountLib = require('eth-lib/lib/account');
 const Accounts = require('./accounts.json');
 const web3Abi = require('web3-eth-abi');
+const ethUtil = require('ethereumjs-util');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
 const LikeCrowdsale = artifacts.require('./LikeCrowdsale.sol');
@@ -33,7 +34,16 @@ const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
 const TransferAndCallReceiverMock2 = artifacts.require('./TransferAndCallReceiverMock2.sol');
 
-const { coinsToCoinUnits } = utils;
+const { coinsToCoinUnits, signHash } = utils;
+
+const typedData = {
+  domain: {
+    name: 'LikeCoin',
+    version: '1',
+    chainId: 1,
+    verifyingContract: '0x02F61Fd266DA6E8B102D4121f5CE7b992640CF98',
+  },
+};
 
 function signTypedCall(signData, privKey) {
   const paramSignatures = signData.map(item => ({ type: 'string', value: `${item.type} ${item.name}` }));
@@ -46,40 +56,43 @@ function signTypedCall(signData, privKey) {
 }
 
 function signTransferDelegated(likeAddr, to, value, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferDelegated' },
-    { type: 'address', name: 'to', value: to },
-    { type: 'uint256', name: 'value', value },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
+  const signData = {
+    contractAddr: likeAddr,
+    method: 'transferDelegated',
+    to,
+    value: `0x${value.toString(16)}`,
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
 function signTransferAndCallDelegated(likeAddr, to, value, data, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferAndCallDelegated' },
-    { type: 'address', name: 'to', value: to },
-    { type: 'uint256', name: 'value', value },
-    { type: 'bytes', name: 'data', value: data },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
+  const signData = {
+    contractAddr: likeAddr,
+    method: 'transferAndCallDelegated',
+    to,
+    value: `0x${value.toString(16)}`,
+    data,
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferAndCallDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
 function signTransferMultipleDelegated(likeAddr, addrs, values, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferMultipleDelegated' },
-    { type: 'address[]', name: 'addrs', value: addrs },
-    { type: 'uint256[]', name: 'values', value: values },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
+  const signData = {
+    contractAddr: likeAddr,
+    method: 'transferMultipleDelegated',
+    addrs,
+    values: values.map(v => `0x${v.toString(16)}`),
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferMultipleDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
 function encodeMock2(to, value, key) {
