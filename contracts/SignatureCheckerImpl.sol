@@ -165,7 +165,10 @@ contract SignatureCheckerImpl {
                 nonce: _nonce
             }))
         ));
-        var (v, r, s) = _bytesToSignature(_signature);
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+        (v, r, s) = _bytesToSignature(_signature);
         return 0x0 != _from && ecrecover(digest, v, r, s) == _from;
     }
 
@@ -191,7 +194,10 @@ contract SignatureCheckerImpl {
                 nonce: _nonce
             }))
         ));
-        var (v, r, s) = _bytesToSignature(_signature);
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+        (v, r, s) = _bytesToSignature(_signature);
         return 0x0 != _from && ecrecover(digest, v, r, s) == _from;
     }
 
@@ -215,7 +221,10 @@ contract SignatureCheckerImpl {
                 nonce: _nonce
             }))
         ));
-        var (v, r, s) = _bytesToSignature(_signature);
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+        (v, r, s) = _bytesToSignature(_signature);
         return 0x0 != _from && ecrecover(digest, v, r, s) == _from;
     }
 }
