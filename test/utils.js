@@ -130,16 +130,12 @@ const types = {
     { name: 'verifyingContract', type: 'address' },
   ],
   TransferDelegatedData: [
-    { name: 'contractAddr', type: 'address' },
-    { name: 'method', type: 'string' },
     { name: 'to', type: 'address' },
     { name: 'value', type: 'uint256' },
     { name: 'maxReward', type: 'uint256' },
     { name: 'nonce', type: 'uint256' },
   ],
   TransferAndCallDelegatedData: [
-    { name: 'contractAddr', type: 'address' },
-    { name: 'method', type: 'string' },
     { name: 'to', type: 'address' },
     { name: 'value', type: 'uint256' },
     { name: 'data', type: 'bytes' },
@@ -147,8 +143,6 @@ const types = {
     { name: 'nonce', type: 'uint256' },
   ],
   TransferMultipleDelegatedData: [
-    { name: 'contractAddr', type: 'address' },
-    { name: 'method', type: 'string' },
     { name: 'addrs', type: 'address[]' },
     { name: 'values', type: 'uint256[]' },
     { name: 'maxReward', type: 'uint256' },
