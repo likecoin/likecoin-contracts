@@ -29,8 +29,6 @@ contract SignatureCheckerImpl {
     }
 
     struct TransferDelegatedData {
-        address contractAddr;
-        string method;
         address to;
         uint256 value;
         uint256 maxReward;
@@ -38,8 +36,6 @@ contract SignatureCheckerImpl {
     }
 
     struct TransferAndCallDelegatedData {
-        address contractAddr;
-        string method;
         address to;
         uint256 value;
         bytes data;
@@ -48,8 +44,6 @@ contract SignatureCheckerImpl {
     }
 
     struct TransferMultipleDelegatedData {
-        address contractAddr;
-        string method;
         address[] addrs;
         uint256[] values;
         uint256 maxReward;
@@ -61,15 +55,15 @@ contract SignatureCheckerImpl {
     );
 
     bytes32 constant TRANSFER_DELEGATED_DATA_TYPEHASH = keccak256(
-        "TransferDelegatedData(address contractAddr,string method,address to,uint256 value,uint256 maxReward,uint256 nonce)"
+        "TransferDelegatedData(address to,uint256 value,uint256 maxReward,uint256 nonce)"
     );
 
     bytes32 constant TRANSFER_AND_CALL_DELEGATED_DATA_TYPEHASH = keccak256(
-        "TransferAndCallDelegatedData(address contractAddr,string method,address to,uint256 value,bytes data,uint256 maxReward,uint256 nonce)"
+        "TransferAndCallDelegatedData(address to,uint256 value,bytes data,uint256 maxReward,uint256 nonce)"
     );
 
     bytes32 constant TRANSFER_MULTIPLE_DELEGATED_DATA_TYPEHASH = keccak256(
-        "TransferMultipleDelegatedData(address contractAddr,string method,address[] addrs,uint256[] values,uint256 maxReward,uint256 nonce)"
+        "TransferMultipleDelegatedData(address[] addrs,uint256[] values,uint256 maxReward,uint256 nonce)"
     );
 
     bytes32 DOMAIN_SEPARATOR;
@@ -96,8 +90,6 @@ contract SignatureCheckerImpl {
     function hash(TransferDelegatedData data) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             TRANSFER_DELEGATED_DATA_TYPEHASH,
-            data.contractAddr,
-            keccak256(bytes(data.method)),
             data.to,
             data.value,
             data.maxReward,
@@ -108,8 +100,6 @@ contract SignatureCheckerImpl {
     function hash(TransferAndCallDelegatedData data) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             TRANSFER_AND_CALL_DELEGATED_DATA_TYPEHASH,
-            data.contractAddr,
-            keccak256(bytes(data.method)),
             data.to,
             data.value,
             keccak256(data.data),
@@ -123,8 +113,6 @@ contract SignatureCheckerImpl {
         bytes32 valuesHash = keccak256(abi.encodePacked(data.values));
         return keccak256(abi.encode(
             TRANSFER_MULTIPLE_DELEGATED_DATA_TYPEHASH,
-            data.contractAddr,
-            keccak256(bytes(data.method)),
             addrsHash,
             valuesHash,
             data.maxReward,
@@ -157,8 +145,6 @@ contract SignatureCheckerImpl {
             "\x19\x01",
             DOMAIN_SEPARATOR,
             hash(TransferDelegatedData({
-                contractAddr: msg.sender,
-                method: "transferDelegated",
                 to: _to,
                 value: _value,
                 maxReward: _maxReward,
@@ -185,8 +171,6 @@ contract SignatureCheckerImpl {
             "\x19\x01",
             DOMAIN_SEPARATOR,
             hash(TransferAndCallDelegatedData({
-                contractAddr: msg.sender,
-                method: "transferAndCallDelegated",
                 to: _to,
                 value: _value,
                 data: _data,
@@ -213,8 +197,6 @@ contract SignatureCheckerImpl {
             "\x19\x01",
             DOMAIN_SEPARATOR,
             hash(TransferMultipleDelegatedData({
-                contractAddr: msg.sender,
-                method: "transferMultipleDelegated",
                 addrs: _addrs,
                 values: _values,
                 maxReward: _maxReward,
