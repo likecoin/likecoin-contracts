@@ -21,9 +21,9 @@
 
 const utils = require('./utils.js');
 const web3Utils = require('web3-utils');
-const AccountLib = require('eth-lib/lib/account');
 const Accounts = require('./accounts.json');
 const web3Abi = require('web3-eth-abi');
+const ethUtil = require('ethereumjs-util');
 
 const LikeCoin = artifacts.require('./LikeCoin.sol');
 const LikeCrowdsale = artifacts.require('./LikeCrowdsale.sol');
@@ -33,53 +33,49 @@ const SignatureCheckerImpl = artifacts.require('./SignatureCheckerImpl.sol');
 const TransferAndCallReceiverMock = artifacts.require('./TransferAndCallReceiverMock.sol');
 const TransferAndCallReceiverMock2 = artifacts.require('./TransferAndCallReceiverMock2.sol');
 
-const { coinsToCoinUnits } = utils;
+const { coinsToCoinUnits, signHash } = utils;
 
-function signTypedCall(signData, privKey) {
-  const paramSignatures = signData.map(item => ({ type: 'string', value: `${item.type} ${item.name}` }));
-  const params = signData.map(item => ({ type: item.type, value: item.value }));
-  const hash = web3Utils.soliditySha3(
-    { type: 'bytes32', value: web3Utils.soliditySha3(...paramSignatures) },
-    { type: 'bytes32', value: web3Utils.soliditySha3(...params) },
-  );
-  return AccountLib.sign(hash, privKey);
+const typedData = {
+  domain: {
+    name: 'LikeCoin',
+    version: '1',
+    chainId: 1,
+    verifyingContract: '0x02F61Fd266DA6E8B102D4121f5CE7b992640CF98',
+  },
+};
+
+function signTransferDelegated(to, value, maxReward, nonce, privKey) {
+  const signData = {
+    to,
+    value: value.toFixed(),
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
-function signTransferDelegated(likeAddr, to, value, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferDelegated' },
-    { type: 'address', name: 'to', value: to },
-    { type: 'uint256', name: 'value', value },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
+function signTransferAndCallDelegated(to, value, data, maxReward, nonce, privKey) {
+  const signData = {
+    to,
+    value: value.toFixed(),
+    data,
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferAndCallDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
-function signTransferAndCallDelegated(likeAddr, to, value, data, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferAndCallDelegated' },
-    { type: 'address', name: 'to', value: to },
-    { type: 'uint256', name: 'value', value },
-    { type: 'bytes', name: 'data', value: data },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
-}
-
-function signTransferMultipleDelegated(likeAddr, addrs, values, maxReward, nonce, privKey) {
-  const signData = [
-    { type: 'address', name: 'contract', value: likeAddr },
-    { type: 'string', name: 'method', value: 'transferMultipleDelegated' },
-    { type: 'address[]', name: 'addrs', value: addrs },
-    { type: 'uint256[]', name: 'values', value: values },
-    { type: 'uint256', name: 'maxReward', value: maxReward },
-    { type: 'uint256', name: 'nonce', value: nonce },
-  ];
-  return signTypedCall(signData, privKey);
+function signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey) {
+  const signData = {
+    addrs,
+    values: values.map(v => v.toFixed()),
+    maxReward,
+    nonce,
+  };
+  const sig = ethUtil.ecsign(signHash(typedData.domain, signData, 'TransferMultipleDelegatedData'), ethUtil.toBuffer(privKey));
+  return ethUtil.toRpcSig(sig.v, sig.r, sig.s);
 }
 
 function encodeMock2(to, value, key) {
@@ -138,7 +134,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     const claimedReward = 0;
     let nonce = web3Utils.randomHex(32);
     let signature =
-      signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
+      signTransferDelegated(to, value, maxReward, nonce, privKey);
     let callResult = await like.transferDelegated(
       from, to, value, maxReward, claimedReward,
       nonce, signature, { from: accounts[2] },
@@ -146,7 +142,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`transferDelegated, first time gas used = ${callResult.receipt.gasUsed}`);
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferDelegated(like.address, to, value, maxReward, nonce, privKey);
+      signTransferDelegated(to, value, maxReward, nonce, privKey);
     callResult = await like.transferDelegated(
       from, to, value, maxReward, claimedReward,
       nonce, signature, { from: accounts[2] },
@@ -187,7 +183,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     const claimedReward = 0;
     let nonce = web3Utils.randomHex(32);
     let signature =
-      signTransferMultipleDelegated(like.address, [accounts[0]], [0], maxReward, nonce, privKey);
+      signTransferMultipleDelegated([accounts[0]], [0], maxReward, nonce, privKey);
     await like.transferMultipleDelegated(
       from, [accounts[0]], [0], maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -197,7 +193,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     let values = [1, 2, 3, 4, 5].map(n => coinsToCoinUnits(n * 100));
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     let callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -205,7 +201,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`transferMultipleDelegated, count = ${addrs.length}, first time gas used = ${callResult.receipt.gasUsed}`);
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -216,7 +212,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     values = [6, 7, 8].map(n => coinsToCoinUnits(n * 100));
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -224,7 +220,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`transferMultipleDelegated, count = ${addrs.length}, first time gas used = ${callResult.receipt.gasUsed}`);
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -235,7 +231,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     values = [9].map(n => coinsToCoinUnits(n * 100));
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -243,7 +239,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`transferMultipleDelegated, count = ${addrs.length}, first time gas used = ${callResult.receipt.gasUsed}`);
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferMultipleDelegated(like.address, addrs, values, maxReward, nonce, privKey);
+      signTransferMultipleDelegated(addrs, values, maxReward, nonce, privKey);
     callResult = await like.transferMultipleDelegated(
       from, addrs, values, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -278,7 +274,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     const claimedReward = 0;
     let nonce = web3Utils.randomHex(32);
     let signature =
-      signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+      signTransferAndCallDelegated(to, value, data, maxReward, nonce, privKey);
     let callResult = await like.transferAndCallDelegated(
       from, to, value, data, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
@@ -286,7 +282,7 @@ contract('LikeCoin Gas Estimation', (accounts) => {
     console.log(`transferAndCallDelegated, first time gas used = ${callResult.receipt.gasUsed}`);
     nonce = web3Utils.randomHex(32);
     signature =
-      signTransferAndCallDelegated(like.address, to, value, data, maxReward, nonce, privKey);
+      signTransferAndCallDelegated(to, value, data, maxReward, nonce, privKey);
     callResult = await like.transferAndCallDelegated(
       from, to, value, data, maxReward, claimedReward,
       nonce, signature, { from: accounts[1] },
