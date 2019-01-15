@@ -44,7 +44,7 @@ contract LikeCoinHTLC is TransferAndCallReceiver {
     }
     
     function tokenCallback(address _from, uint256 _value, bytes _data) public {
-        // require(msg.sender == address(like));
+        require(msg.sender == address(like));
         address to;
         uint expiry; 
         bytes32 hashlock;
