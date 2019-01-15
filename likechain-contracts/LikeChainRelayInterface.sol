@@ -17,7 +17,7 @@
 
 pragma solidity ^0.4.25;
 
-import "github.com/OpenZeppelin/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "./IERC20.sol";
 
 contract LikeChainRelayLogicInterface {
     function commitWithdrawHash(uint64 height, uint64 round, bytes _payload) public;
