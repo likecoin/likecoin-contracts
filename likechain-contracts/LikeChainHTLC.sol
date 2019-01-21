@@ -18,7 +18,7 @@
 
 pragma solidity ^0.4.25;
 
-import "github.com/OpenZeppelin/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "./IERC20.sol";
 import "./TransferAndCallReceiver.sol";
 
 contract LikeCoinHTLC is TransferAndCallReceiver {
@@ -44,7 +44,7 @@ contract LikeCoinHTLC is TransferAndCallReceiver {
     }
     
     function tokenCallback(address _from, uint256 _value, bytes _data) public {
-        // require(msg.sender == address(like));
+        require(msg.sender == address(like));
         address to;
         uint expiry; 
         bytes32 hashlock;

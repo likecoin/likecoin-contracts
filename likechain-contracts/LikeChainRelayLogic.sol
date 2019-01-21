@@ -648,20 +648,24 @@ contract LikeChainRelayLogic is LikeChainRelayState, LikeChainRelayLogicInterfac
         }
     }
 
+    // In the IAVL tree, the key is the hash of the withdraw information ({ from, to, value, fee, nonce }) and the value is
+    // 0x01 (only as an indicator of key existence). Therefore the proving process is as follows:
     // 1. reconstruct key from { from, to, value, fee, nonce }
-    // 2. pack [0, 1, leafVersionBytes, key, ONE_HASH]
+    // 2. pack lead node: [0, 1, leafVersionBytes, key, sha256(0x01)]
+    //    (Note that the `1` is encoded as signed varint, so is 0x02 in binary. See line 275 for details)
     // 3. hash packed output to get current hash
     // 4. repeat the followings:
     //    1. extract prefixBytes and suffixBytes
     //    2. pack [prefixBytes, currentHash, suffixBytes]
     //    3. hash packed output and update current hash
     // 5. output current hash as root hash
+    // 6. check if root hash from the proof is equal to the withdraw hash recorded previously from commitWithdrawHash
     
     function _proofAndExtractWithdraw(bytes _withdrawInfo, bytes _proof) internal returns (address to, uint256 value, uint256 fee) {
         bytes32 id = sha256(_withdrawInfo);
         require(!consumedIds[id]);
         consumedIds[id] = true;
-        bytes32 proofValueHash = hex"4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a"; // sha256 of hex"01", truncated
+        bytes32 proofValueHash = hex"4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a"; // sha256 of hex"01"
         bytes32 rootHash = _proofRootHash(id, proofValueHash, _proof);
         require(rootHash == latestWithdrawHash);
         assembly {
